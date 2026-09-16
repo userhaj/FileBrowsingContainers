@@ -220,6 +220,10 @@ func _gui_input(event: InputEvent) -> void:
 		# Notify if clicked item is selected before this click
 		var item = get_item_at_position(event.position)
 		_is_tree_item_selected_before_click = item.is_selected(0) if item else false
+		
+		# Deselect when left clicking empty space
+		if event.button_mask == MOUSE_BUTTON_LEFT and not get_item_at_position(event.position):
+			deselect_all()
 	
 	# Set resize cursor if near title column end
 	#if event is InputEventMouse and not event.is_pressed():
