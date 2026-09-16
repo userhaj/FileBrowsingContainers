@@ -226,8 +226,8 @@ func _gui_input(event: InputEvent) -> void:
 			deselect_all()
 	
 	# Set resize cursor if near title column end
-	#if event is InputEventMouse and not event.is_pressed():
-		#mouse_default_cursor_shape = Control.CURSOR_HSIZE if _column_title_end_near() >= 0 else Control.CURSOR_ARROW
+	if event is InputEventMouse and not event.is_pressed():
+		mouse_default_cursor_shape = Control.CURSOR_HSIZE if _column_title_end_near() >= 0 else Control.CURSOR_ARROW
 
 	#if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and \
 	#get_global_file_area_rect().has_point(get_global_mouse_position()) and not $SelectBox.is_selecting:
