@@ -10,24 +10,19 @@ signal folder_changed(folder_path: String)
 
 var _folder_size: float = 64.0
 var _full_directory_path: String
-@onready var _folder_container: HFlowContainer = $SelectBox/ScrollContainer/HFlowContainer
+@onready var _folder_container: HFlowContainer = $ScrollContainer/MarginContainer/HFlowContainer
 @onready var _thread_queue := ThreadQueue.new()
 @onready var ctrl_f_line_edit_plus: LineEditPlus = $CtrlFPanelContainer/HBoxContainer/CtrlFLineEditPlus
 @onready var ctrl_f_exit_button: Button = $CtrlFPanelContainer/HBoxContainer/CtrlFExitButton
 @onready var ctrl_f_panel_container: PanelContainer = $CtrlFPanelContainer
 @onready var file_popup_menu: PopupMenu = $FilePopupMenu
+@onready var select_box: SelectBox = $ScrollContainer/MarginContainer/SelectBox
+@onready var margin_container: MarginContainer = $ScrollContainer/MarginContainer
 
 @export var show_hidden_files: bool = true
 
 const FOLDER = preload("uid://d4fyh375x0gay")
 const FILE_TRANSFER_WINDOW = preload("uid://5bl4nmd56lgq")
-
-
-# Dragging tracking variables
-var _is_dragging: bool = false
-var _click_start_position: Vector2
-var _click_start_object: Node
-
 const SAVE_FILEPATH = "user://GDFileBrowserIconView.cfg"
 
 func _ready():
@@ -39,6 +34,13 @@ func _ready():
 		set_folder_size(folder_size)
 
 	ctrl_f_exit_button.pressed.connect(ctrl_f_panel_container.hide)
+	
+	# Setup Margin container
+	var margin_value = 4
+	margin_container.add_theme_constant_override("margin_top", margin_value)
+	margin_container.add_theme_constant_override("margin_left", margin_value)
+	margin_container.add_theme_constant_override("margin_bottom", margin_value)
+	margin_container.add_theme_constant_override("margin_right", margin_value)
 
 func files_dropped(files: PackedStringArray):
 	if visible:
@@ -57,25 +59,12 @@ func files_dropped(files: PackedStringArray):
 				file_transfer.copy(files, target_folder)
 	
 func _input(event):
-	# Handle drag icon event
+	# Start a file select box
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed and \
+		if event.pressed and not select_box.is_selecting and\
 		# Prevent starting SelectBox outside of file area
 		get_global_file_area_rect().has_point(get_global_mouse_position()):
-			self._click_start_position = get_local_mouse_position()
-			var folder = get_object_at_point(self._click_start_position)
-			# If you did not click a folder, do nothing
-			if null != folder:
-				self._click_start_object = folder
-				$SelectBox.cancel_select()
-			else:
-				$SelectBox.start_selecting(get_local_mouse_position())
-	if event is InputEventMouseButton and not event.pressed:
-		self._is_dragging = false
-		self._click_start_position = Vector2()
-		self._click_start_object = null
-		if event.is_released() and $SelectBox.is_selecting:
-			$SelectBox.stop_selecting()
+			select_box.start_selecting(_folder_container.get_local_mouse_position(), _folder_container.get_rect())
 	
 	if event is InputEventKey and Input.is_key_pressed(KEY_F5):
 		refresh()
@@ -131,6 +120,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		var selected = PackedStringArray(get_selected_paths())
 		if selected:
 			$TrashFileConfirmationDialog.ask_trash_files(selected)
+	
+	if event is InputEventKey and Input.is_key_pressed(KEY_A) and Input.is_key_pressed(KEY_CTRL) and\
+	# Multiple FileTrees may be available, only affect focused File Tree
+	not event.is_echo() and has_focus():
+		select_all()
+		accept_event()
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -156,7 +151,7 @@ func get_directory() -> String:
 
 # Adds folder to current view. DOES NOT EDIT FILE SYSTEM
 func add_folder_button(folder: FolderLargeIconButton):
-	$SelectBox/ScrollContainer/HFlowContainer.call_deferred("add_child", folder)
+	$ScrollContainer/MarginContainer/HFlowContainer.call_deferred("add_child", folder)
 
 # Returns an array of all folders/files buttons
 func get_folder_buttons() -> Array[Node]:
@@ -231,6 +226,12 @@ func deselect_all_children():
 		if child.has_method("deselect"):
 			child.deselect()
 
+func select_all():
+	for child: FolderLargeIconButton in get_folder_buttons():
+		# Guarantee object is deselectable
+		if child.has_method("select"):
+			child.select()
+
 # Call select on child under position
 func select_child_by_point(target_position: Vector2):
 	var area = Rect2(target_position, Vector2(1, 1)) # Single pixel area/point
@@ -288,10 +289,9 @@ func get_path_at_point(target_position: Vector2) -> String:
 
 # Gets folder/file object under position
 func get_object_at_point(target_position: Vector2) -> FolderLargeIconButton:
-	var area = Rect2(target_position, Vector2(1, 1)) # Single pixel area/point
 	for child: Control in get_folder_buttons():
 		if child.has_method("select"):
-			if child.get_rect().intersects(area, true):
+			if child.get_global_rect().has_point(get_global_transform()*target_position):
 				return child
 	return null
 
@@ -345,9 +345,39 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 	# Use OS instead of Godot for drag and drop (if available)
 	if get_window().has_method("drag_files"):
 		get_window().drag_files(PackedStringArray(selected))
+	# Success
 	else:
+		
+		# Get selected folders/files
+		var selected_objects = get_selected_objects()
+		if selected.size() > 0:
+			# No need to render more than screen size
+			var max_text = DisplayServer.screen_get_size().y / 16
+			# Render all icons
+			var icons_texts = selected_objects.slice(0,max_text).map(func(folder): return folder.icon)
+			var font = get_theme_font("font", "Label")
+			font = font if font else get_theme_default_font()
+			var images = TextRenderer.batch_text_to_image(icons_texts,font)
+			
+			# Add icons and text to drag preview
+			var label_box = VBoxContainer.new()
+			for i in selected_objects.size():
+				if i == max_text:
+					break
+				# Create drag visibility
+				var label = Label.new()
+				label.text = selected_objects[i].path.get_file()
+				#label_box.add_child(label)
+				var icon = TextureRect.new()
+				icon.texture = ImageTexture.create_from_image(images[i])
+				var hbox = HBoxContainer.new()
+				hbox.add_child(icon)
+				hbox.add_child(label)
+				label_box.add_child(hbox)
+				
+			set_drag_preview(label_box)
+
 		return PackedStringArray(selected)
-	
 	return null
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:

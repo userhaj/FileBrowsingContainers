@@ -6,16 +6,18 @@ signal selected_area(area: Rect2)
 
 var is_selecting = false
 var start_pos: Vector2
+var clamp_area:= Rect2()
 
 var _select_on_next_drag = false
 var _select_on_next_drag_start
 
-func start_selecting(start_position: Vector2):
+func start_selecting(start_position: Vector2, max_bounds:= Rect2()):
 	# Show higlighting rect
 	$SelectColorRect.set_position(start_position)
 	self.start_pos = start_position
 	is_selecting = true
 	$SelectColorRect.show()
+	clamp_area = max_bounds
 
 func start_selecting_on_drag(start_position: Vector2):
 	_select_on_next_drag = true
@@ -34,6 +36,15 @@ func cancel_select():
 	$SelectColorRect.hide()
 
 func _input(event: InputEvent) -> void:
+	# Cancel selectbox if drag file started
+	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and \
+	is_selecting and get_viewport().gui_get_drag_data():
+		cancel_select()
+	
+	# Finish selection of SelectBox on mouse release
+	if event is InputEventMouse and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and is_selecting:
+		stop_selecting()
+	
 	if _select_on_next_drag:
 		if event is InputEventMouseMotion:
 			if get_local_mouse_position().distance_to(_select_on_next_drag_start) > 16:

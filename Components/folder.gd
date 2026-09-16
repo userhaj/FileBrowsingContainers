@@ -26,6 +26,8 @@ var icons : Dictionary = {"dll": "📚", "txt": "🗒️", "exe": "🚀", "conf"
  "hpp": "🗣️", "cfg": "⚙️", "apk": "🤖", "docx": "🗒️", "ppt": "📽️"}
 var clicked: bool = false
 
+var icon: String:
+	get: return $VBoxContainer/ImageLabel.text
 
 func _ready() -> void:
 	# Custom object theme must be applied
@@ -226,7 +228,6 @@ func _on_name_line_edit_plus_text_submitted(new_filename: String) -> void:
 	$NameLineEditPlus.hide()
 	if rename_attempt == OK:
 		set_path(new_path)
-		
 
 
 func _on_button_down() -> void:
