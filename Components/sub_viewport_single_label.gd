@@ -23,10 +23,10 @@ func _copy_root_theme():
 		if not theme_resource.is_type_variation("EmojiFont", "Label"):
 			theme_resource.set_type_variation("EmojiFont", "Label")
 		$PanelContainer/Label.set_theme(theme_resource)
-		var label_set = LabelSettings.new()
 		var theme_font = theme_resource.get_font("font", "EmojiFont")
 		var theme_color = theme_resource.get_color("font_color", "EmojiFont")
 		var theme_size = theme_resource.get_font_size("font_size", "EmojiFont")
+		var label_set = LabelSettings.new()
 		label_set.font = theme_font if theme_font else $PanelContainer/Label.label_settings.font
 		label_set.font_size = $PanelContainer/Label.label_settings.font_size if $PanelContainer/Label.label_settings.font_size else theme_size
 		label_set.font_color = theme_color if theme_resource.has_color("font_color", "EmojiFont") else $PanelContainer/Label.label_settings.font_color

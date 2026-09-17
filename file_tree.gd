@@ -28,7 +28,6 @@ var _sort_column = column.NAME
 var _is_sort_ascending = true
 var dragging_resize_column: int = -1
 var _refresh_id: int = 0
-var _icons_used = {}
 var _unique_theme_type:
 	get:
 		var theme_type = "Tree"
@@ -39,7 +38,7 @@ var _unique_theme_type:
 		if only_show_drives:
 			theme_type += "_only_show_drives"
 		return theme_type
-var edit_theme
+var edit_theme: Theme
 var _tree_item_font_size = 0
 var tree_item_font_size :int :
 	set(value): set_tree_item_font_size(value)
@@ -59,9 +58,11 @@ var icons : Dictionary = {"dll": "📚", "txt": "🗒️", "exe": "🚀", "conf"
 "x86_64": "🚀", "pdf": "🖨️", "ogg": "🎵", "c": "🌊", "cpp": "🌊", "sh": "🐚", \
 "desktop": "🖥️", "h": "🗣️", "so": "🎁", "md": "🗒️", "drawio": "📝", "bin": "💿",\
 "iso": "💿", "stl": "🧵", "gcode": "🧵", "arm64": "🦾", "svg": "🖼️",\
- "hpp": "🗣️", "cfg": "⚙️", "apk": "🤖", "docx": "🗒️", "ppt": "📽️"}
+ "hpp": "🗣️", "cfg": "⚙️", "apk": "🤖", "docx": "🗒️", "ppt": "📽️", "": "📄",\
+"folder": "📁"}
 
-const SUB_VIEWPORT_SINGLE_LABEL = preload("uid://cnrjg1q6m5y36")
+var icon_textures = {}
+
 const FILE_TRANSFER_WINDOW = preload("uid://5bl4nmd56lgq")
 
 
@@ -133,21 +134,29 @@ func _input(event):
 func set_tree_item_font_size(value: int):
 	if value <= 0 or value ==_tree_item_font_size:
 		return
-	
-	
 	_tree_item_font_size = value
+	
+	for tree_item: TreeItem in _get_all_tree_items():
+		tree_item.set_icon_max_width.call_deferred(0,value)
+	
+	await get_tree().process_frame
 	edit_theme = ThemeDB.get_project_theme()
 	if not edit_theme:
 		edit_theme = get_tree().root.theme if get_tree().root.theme else theme
-
-	edit_theme.set_type_variation(_unique_theme_type, "Tree")
-	edit_theme.set_font_size("font_size", _unique_theme_type, value)
-	_alter_icons(value)
 	
-	for icon in _icons_used:
-		var subview: SubViewPortSingleLabel = get_node_or_null(icon)
-		subview.resize(Vector2(value, value))
 
+	if not edit_theme.is_type_variation(_unique_theme_type, "Tree"):
+		edit_theme.set_type_variation(_unique_theme_type, "Tree") # THIS IS SLOW
+	
+	var change_font = edit_theme.set_font_size.bind("font_size", _unique_theme_type, value)
+	if get_tree().process_frame.is_connected(change_font):
+		get_tree().process_frame.disconnect(change_font)
+	get_tree().process_frame.connect(change_font, CONNECT_ONE_SHOT)
+	
+	var fold_icon_change = _alter_icons.bind(value)
+	if get_tree().process_frame.is_connected(fold_icon_change):
+		get_tree().process_frame.disconnect(fold_icon_change)
+	get_tree().process_frame.connect(fold_icon_change, CONNECT_ONE_SHOT)
 
 func _get_text_size(text: String) -> Vector2:
 	if not edit_theme:
@@ -170,10 +179,12 @@ func _alter_icons(value):
 		var img = Image.new()
 		img.load_svg_from_string(default_tree_icons[icon_name], svg_scale)
 		var icon = ImageTexture.create_from_image(img)
-		edit_theme.set_icon(icon_name, _unique_theme_type, icon)
+		await get_tree().process_frame
+		edit_theme.set_icon.call_deferred(icon_name, _unique_theme_type, icon)
 	
 	# Scale space for fold image
 	var margin_scale = int(16.0 * svg_scale) if svg_scale > 1 else 16
+	await get_tree().process_frame
 	edit_theme.set_constant("item_margin", _unique_theme_type, margin_scale)
 
 func _get_all_tree_items() -> Array:
@@ -278,7 +289,17 @@ func _ready():
 	
 	if edit_theme:
 		_tree_item_font_size = edit_theme.get_font_size("font_size", _unique_theme_type)
-
+	
+	# Create all icons used
+	for icon in icons.values():
+		icon_textures.set(icon, null)
+	var icon_font = edit_theme.get_font("font", "EmojiFont")
+	icon_font = icon_font if icon_font else get_theme_default_font()
+	var render_images= TextRenderer.batch_text_to_image(icon_textures.keys(), icon_font, 64)
+	var count = 0
+	for icon in icon_textures.keys():
+		icon_textures.set(icon, ImageTexture.create_from_image(render_images[count]))
+		count += 1
 
 
 func _enter_tree() -> void:
@@ -532,10 +553,12 @@ func _create_folder(base_tree_item, full_path: String, label_full_path: bool=fal
 		
 		# Set Icon
 		var icon_emoji = "📁"
-		_icons_used.set(icon_emoji, 0)
-		var subview = SubViewPortSingleLabel.get_make(icon_emoji, self)
-		subview.resize(Vector2(tree_item_font_size, tree_item_font_size))
-		new_tree_item.set_icon(0, subview.get_texture())
+		#_icons_used.set(icon_emoji, 0)
+		#var subview = SubViewPortSingleLabel.get_make(icon_emoji, self)
+		#subview.resize(Vector2(tree_item_font_size, tree_item_font_size))
+		#new_tree_item.set_icon(0, subview.get_texture())
+		new_tree_item.set_icon(0, icon_textures.get(icon_emoji))
+		new_tree_item.set_icon_max_width(0, tree_item_font_size)
 		
 		
 		# Create place holder item on folders with sub-content
@@ -585,10 +608,12 @@ func _create_file(base_tree_item, full_path: String):
 		var ext: String = full_path.get_extension()
 		var icon_emoji: String = icons.get(ext, "📄")
 		
-		_icons_used.set(icon_emoji, 0)
-		var subview = SubViewPortSingleLabel.get_make(icon_emoji, self)
-		subview.resize(Vector2(tree_item_font_size, tree_item_font_size))
-		new_tree_item.set_icon(0, subview.get_texture())
+		#_icons_used.set(icon_emoji, 0)
+		#var subview = SubViewPortSingleLabel.get_make(icon_emoji, self)
+		#subview.resize(Vector2(tree_item_font_size, tree_item_font_size))
+		#new_tree_item.set_icon(0, subview.get_texture())
+		new_tree_item.set_icon(0, icon_textures.get(icon_emoji))
+		new_tree_item.set_icon_max_width(0, tree_item_font_size)
 		
 
 		if always_fit_name:
@@ -689,10 +714,14 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 			# Create drag visibility
 			var label = Label.new()
 			label.text = full_path.get_file()
+			var label_set = LabelSettings.new()
+			label_set.font_size = tree_item_font_size
+			label.label_settings = label_set
 			#label_box.add_child(label)
 			var icon = TextureRect.new()
 			# TODO Error handling on no icon?
 			icon.texture = select.get_icon(0)
+			icon.custom_maximum_size = Vector2(tree_item_font_size, tree_item_font_size+2)
 			var hbox = HBoxContainer.new()
 			hbox.add_child(icon)
 			hbox.add_child(label)
