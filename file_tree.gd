@@ -188,14 +188,13 @@ func _alter_icons(value):
 	edit_theme.set_constant("item_margin", _unique_theme_type, margin_scale)
 
 func _get_all_tree_items() -> Array:
-	var all = []
-	var tree_item: TreeItem= get_root().get_first_child()
+	var all_tree_items = []
+	var tree_item = get_root().get_first_child()
 	while tree_item:
-		all.append(tree_item)
-		tree_item = tree_item.get_next()
-	return all
-	
-	
+		all_tree_items.append(tree_item)
+		tree_item = tree_item.get_next_visible()
+	return all_tree_items
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Select all Ctrl+A
