@@ -81,8 +81,10 @@ func _input(event):
 	if event is InputEventMouseButton and event.ctrl_pressed and has_mouse_focus:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			set_folder_size(_folder_size * 1.1)
+			accept_event()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			set_folder_size(_folder_size * 0.9)
+			accept_event()
 			
 	# Ctrl F Search input handling
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F and event.ctrl_pressed:
