@@ -300,13 +300,14 @@ func set_folder_size(custom_size: float):
 	# Minimum size 64, errors occur below this size
 	if custom_size < 64:
 		return
-		
+	
 	self._folder_size = custom_size
 	# Set folder/file square size
 	for child: Control in get_folder_buttons():
 		child.custom_minimum_size = Vector2(custom_size, custom_size)
 	save_settings()
 	
+
 func save_settings():
 	var config = ConfigFile.new()
 	config.set_value("folder_icon_view", "_folder_size", _folder_size)

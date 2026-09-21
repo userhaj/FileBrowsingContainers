@@ -10,8 +10,6 @@ var set_image_thread: Thread
 var is_image_set: bool = false
 var image_path: String
 var _thread_queue: ThreadQueue
-var _set_image_non_queue_thread: Thread
-var _need_icon_scale: bool=false
 var icons : Dictionary = {"dll": "📚", "txt": "🗒️", "exe": "🚀", "conf": "⚙️",\
  "ini": "⚙️", "py": "🐍", "pyw": "🐍", "url": "🕸️", "htm": "🕸️", "html": "🕸️",\
 "lnk": "🔗", "ods": "📊", "xls": "📊", "xlsx": "📊", "json": "📔", "jar": "☕",\
@@ -24,151 +22,41 @@ var icons : Dictionary = {"dll": "📚", "txt": "🗒️", "exe": "🚀", "conf"
 "desktop": "🖥️", "h": "🗣️", "so": "🎁", "md": "🗒️", "drawio": "📝", "bin": "💿",\
 "iso": "💿", "stl": "🧵", "gcode": "🧵", "arm64": "🦾", "svg": "🖼️",\
  "hpp": "🗣️", "cfg": "⚙️", "apk": "🤖", "docx": "🗒️", "ppt": "📽️"}
+
+var icon: String = "📄"
 var clicked: bool = false
 
-var icon: String:
-	get: return $VBoxContainer/ImageLabel.text
+#var icon: String:
+	#get: return $VBoxContainer/ImageLabel.text
 
 func _ready() -> void:
 	# Custom object theme must be applied
-	_copy_root_theme()
-	get_tree().root.theme_changed.connect(_copy_root_theme)
-	
-func _copy_root_theme():
-	var theme_resource: Theme = get_tree().root.get_theme()
-	if theme_resource:
-		set_theme(theme_resource)
-		$VBoxContainer/ImageLabel.label_settings.font = theme_resource.get_font("font", "EmojiFont")
-		$VBoxContainer/ImageLabel.label_settings.font_size = theme_resource.get_font_size("font_size", "EmojiFont")
-		$VBoxContainer/ImageLabel.label_settings.font_color = theme_resource.get_color("font_color", "EmojiFont")
+	#_copy_root_theme()
+	#get_tree().root.theme_changed.connect(_copy_root_theme)
+	_on_resized()
+
+#func _copy_root_theme():
+	#var theme_resource: Theme = get_tree().root.get_theme()
+	#if theme_resource:
+		#set_theme(theme_resource)
+		#$VBoxContainer/ImageLabel.label_settings.font = theme_resource.get_font("font", "EmojiFont")
+		#$VBoxContainer/ImageLabel.label_settings.font_size = theme_resource.get_font_size("font_size", "EmojiFont")
+		#$VBoxContainer/ImageLabel.label_settings.font_color = theme_resource.get_color("font_color", "EmojiFont")
 
 # Optional work queue
 func set_thread_queue(thread_queue: ThreadQueue):
 	self._thread_queue = thread_queue
+	$VBoxContainer/FileTextureRect.external_thread_queue = thread_queue
 
-func _icon_scale():
-	if $VisibleOnScreenNotifier2D.is_on_screen():
-		call_deferred("_icon_scale_work")
-	else:
-		_need_icon_scale = true
-	
-	#if self._thread_queue:
-		#self._thread_queue.enqueue(call_thread_safe.bind("_icon_scale_work"), _work_done)
-	#else:
-		#_icon_scale_work()
 
-func _work_done(_result):
-	pass
-
-func _icon_scale_work():
-	# Resize folder icon to be size of parent
-	if $VBoxContainer/ImageLabel:
-		# Available file/dir object height
-		var height = get_rect().size.y
-		# Height space used for 2 lines of text
-		var text_height = $VBoxContainer/NameLabel.get_line_height() * 2
-		$VBoxContainer/NameLabel.custom_minimum_size = Vector2(0, $VBoxContainer/NameLabel.get_line_height())
-		# Set font size to height minus 2 lines of text height
-		$VBoxContainer/ImageLabel.label_settings.font_size = height - text_height
-		# About 20% of an icon space is empty, remove to center icon
-		$VBoxContainer/ImageLabel.label_settings.font_size *= 0.8
-		
-		#Check necessity
-		#$VisibleOnScreenNotifier2D.scale = scale_amount
 
 static func is_image_extension(extension: String):
 	return extension.to_lower() in ["png", "svg", "bmp", "jpg", "ktx", "tga", "webp"]
 
 func set_image(full_path: String):
-	self.image_path = full_path
-	self.is_image_set = true
-	if self._thread_queue:
-		self._thread_queue.enqueue(_image_texture_from_path.bind(self.image_path, $VisibleOnScreenNotifier2D.is_on_screen), set_image_texture.call_deferred)
-	# If thread queue does not exist, create and handle thread work
-	else:
-		self._set_image_non_queue_thread = Thread.new()
-		self._set_image_non_queue_thread.start(_set_image_thread_work.bind(self.image_path, $VisibleOnScreenNotifier2D.is_on_screen))
+	$VBoxContainer/FileTextureRect.visible = true
+	$VBoxContainer/FileTextureRect.image_path = full_path
 
-
-func _set_image_thread_work(full_path: String, is_on_screen: Callable):
-	var image_texture: ImageTexture = _image_texture_from_path(full_path, is_on_screen)
-	call_deferred("_end_non_queue_thread", image_texture)
-
-func _end_non_queue_thread(image_texture: ImageTexture):
-	set_image_texture(image_texture)
-	_set_image_non_queue_thread.wait_to_finish()
-	
-
-func _apply_texture_image_icon():
-	if is_image_set and (null == $VBoxContainer/TextureRect.texture):
-		set_image(image_path)
-	if _need_icon_scale:
-		_need_icon_scale = false
-		_icon_scale_work()
-		
-		
-
-func _remove_texture_image_icon():
-	$TextureDeleteTimer.start()
-	
-func _texture_delete():
-	# If memory is not low, reset delete timer
-	if not _is_low_memory():
-		$TextureDeleteTimer.start()
-		return
-	# Only delete if not on screen
-	if not $VisibleOnScreenNotifier2D.is_on_screen():
-		$VBoxContainer/ImageLabel.show()
-		$VBoxContainer/TextureRect.texture = null
-
-# Check if 80%+ of memory is used
-func _is_low_memory():
-	var mem_info = OS.get_memory_info()
-	var target_low_percent = 0.2
-	var free_mem_percent = float(mem_info["free"]) / float(mem_info["physical"])
-	return free_mem_percent < target_low_percent
-
-func _slow_show(control: Control):
-	var tween = create_tween()
-	control.modulate.a = 0
-	control.show()
-	tween.tween_property(control, "modulate:a", 1.0, 0.25)
-
-func _slow_hide(control: Control):
-	var tween = create_tween()
-	control.modulate.a = 1
-	control.show()
-	tween.tween_property(control, "modulate:a", 0.0, 0.25)
-	
-
-# Creat an image texture, if texture is on screen
-func _image_texture_from_path(full_path: String, is_on_screen: Callable):
-	var extension:String = full_path.get_extension()
-	if FolderLargeIconButton.is_image_extension(extension) && is_on_screen.call():
-		var image = Image.load_from_file(full_path)
-		
-		if image:
-		# Reduce image size to save ram, procesing speed
-			var image_width = float(image.get_size().x)
-			var target_width = 1024.0
-			if image_width > target_width:
-				var image_scale = target_width / image_width
-				image.resize(target_width, image.get_size().y * image_scale)
-			
-			# Create texture
-			var new_texture = ImageTexture.create_from_image(image)
-			return new_texture
-	return null
-
-func set_image_texture(new_texture: ImageTexture):
-	if null == new_texture:
-		return
-		#_remove_texture_image_icon()
-	else:
-		if $VBoxContainer/TextureRect:
-			$VBoxContainer/TextureRect.texture = new_texture
-			_slow_show($VBoxContainer/TextureRect)
-			$VBoxContainer/ImageLabel.hide()
 
 func select():
 	self.is_selected = true
@@ -180,7 +68,7 @@ func deselect():
 
 func _on_resized():
 	$VisibleOnScreenNotifier2D.rect = get_rect()
-	_icon_scale()
+	$VBoxContainer/FileTextureRect.custom_maximum_size = Vector2(-1, size.y - $VBoxContainer/NameLabel.size.y)
 
 func set_path(abs_path: String, text_icon: String = ""):
 	# Sanitize path
@@ -190,14 +78,14 @@ func set_path(abs_path: String, text_icon: String = ""):
 	$VBoxContainer/NameLabel.text = self.path.get_slice("/", last_index)
 	$VBoxContainer/NameLabel.tooltip_text = $VBoxContainer/NameLabel.text
 	tooltip_text = $VBoxContainer/NameLabel.text
-	
 
 	var ext = self.path.get_extension()
-	if text_icon != "":
-		$VBoxContainer/ImageLabel.text = text_icon
-	elif FileAccess.file_exists(abs_path):
-		# Set icon or default
-		$VBoxContainer/ImageLabel.text = icons.get(ext, "📄")
+	# Use custom icon if requested, else find icon or default emoji
+	icon = icons.get(ext, "📄") if text_icon == "" else text_icon
+
+	$VBoxContainer/FileTextureRect.emoji_icon = icon
+
+	
 		
 func get_abs_path():
 	return self.path
@@ -207,14 +95,14 @@ func _on_double_click_timer_timeout() -> void:
 	clicked = false
 
 func start_rename():
-	$NameLineEditPlus.text =  path.get_file()
-	$NameLineEditPlus.show()
-	$NameLineEditPlus.grab_focus()
+	$NameLineEdit.text =  path.get_file()
+	$NameLineEdit.show()
+	$NameLineEdit.grab_focus()
 
 # Rename rejected
 func _on_name_line_edit_plus_text_change_rejected(_rejected_substring: String) -> void:
-	$NameLineEditPlus.text = ""
-	$NameLineEditPlus.hide()
+	$NameLineEdit.text = ""
+	$NameLineEdit.hide()
 
 # Rename rejected
 func _on_name_line_edit_plus_focus_exited() -> void:
@@ -225,7 +113,7 @@ func _on_name_line_edit_plus_text_submitted(new_filename: String) -> void:
 	var folder = path.get_base_dir()
 	var new_path = folder.path_join(new_filename)
 	var rename_attempt = DirAccess.rename_absolute(path, new_path)
-	$NameLineEditPlus.hide()
+	$NameLineEdit.hide()
 	if rename_attempt == OK:
 		set_path(new_path)
 

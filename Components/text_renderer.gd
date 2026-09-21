@@ -32,13 +32,15 @@ static func batch_text_to_image(text_array: Array, font: Font, font_size: int = 
 		var height = ascent + descent
 		RenderingServer.viewport_set_size(view, width, height)
 		
-		font.draw_string(item, Vector2(0, ascent), text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, text_color)
-		
-	
+		font.draw_string(item, Vector2(0, ascent), text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, text_color)	
 	# Force all fonts to render
 	RenderingServer.force_draw(false)
 	# Get newly rendered frames from views
 	var image_array = views.map(func(view)->Image: return RenderingServer.texture_2d_get(RenderingServer.viewport_get_texture(view))) 
+	
+	# Must clear font cache manually to prevent memory leak
+	for rid in font.get_rids():
+		TextServerManager.get_primary_interface().font_clear_size_cache(rid)
 	# clean up memory used
 	for rid in created_rids:
 		RenderingServer.free_rid(rid)
