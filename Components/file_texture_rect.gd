@@ -57,6 +57,8 @@ func image_2_texture(file_path, height):
 func _on_resized() -> void:
 	# Extra space gives extra notification time before visible on screen on scroll
 	$VisibleOnScreenNotifier2D.rect = get_rect().grow(size.y)
+	# Fix loading all textures that on not yet visible on screen
+	await RenderingServer.frame_post_draw
 	if image_path:
 		if texture:
 			if texture.get_size().y < size.y or texture.get_size().y > size.y * 1.2:
