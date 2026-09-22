@@ -41,6 +41,7 @@ custom_minimum_size = Vector2(64, 64)
 clip_contents = true
 offset_right = 64.0
 offset_bottom = 64.0
+size_flags_horizontal = 4
 mouse_filter = 1
 button_mask = 3
 texture_hover = SubResource("GradientTexture2D_k0c74")

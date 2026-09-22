@@ -45,13 +45,16 @@ func image_2_texture(file_path, height):
 	if not height or not file_path:
 		return
 	var img = Image.load_from_file(file_path)
-	height = height if height < img.get_height() else img.get_height()
-	var img_scale = height / img.get_height() if height < img.get_height() else 1
-	
-	img.resize(img.get_width() * img_scale, height)
-	var img_texture = ImageTexture.create_from_image(img)
-	img = null
-	return img_texture
+	if img:
+		height = height if height < img.get_height() else img.get_height()
+		var img_scale = height / img.get_height() if height < img.get_height() else 1
+		
+		img.resize(img.get_width() * img_scale, height)
+		var img_texture = ImageTexture.create_from_image(img)
+		img = null
+		return img_texture
+	# Failure to load image
+	return null
 
 
 func _on_resized() -> void:
@@ -69,6 +72,8 @@ func _on_resized() -> void:
 			emoji_icon = emoji_icon
 		elif emoji_font_size > ceil(size.y*2):
 			emoji_font_size = min(int(size.y * 1.2), MAX_EMOJI_SIZE)
+			emoji_icon = emoji_icon
+		elif not texture:
 			emoji_icon = emoji_icon
 
 

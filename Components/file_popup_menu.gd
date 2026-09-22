@@ -11,8 +11,14 @@ class_name FilePopupMenu
 enum BASEMENU{NEW_FOLDER, NEW_FILE, OPEN, TRASH}
 enum FILETYPE_FLAG{NONE=0, SINGLE_FILE=1, SINGLE_FOLDER=2, MULTIPLE_FILES=4, MULITPLE_FOLDER=8, FILES_SAME_MIMETYPE=16, MIXED_FILES_FOLDERS=32, ALL=63}
 enum MENU{TEXT, EMOJI}
+enum MENUPROP{TEXT, EMOJI_ICON, CALLABLE, FILETYPE_FLAG, ID}
+enum SUB_MENU_KEY{TEXT, EMOJI_ICON, COMMANDS, FILETYPE_FLAG, ID}
 var _id_callables = {}
+
+# Keys are MENUPROP
 var _added_menus: Dictionary = {}
+# type is Array[Dictionary[SUB_MENU_KEY]], SUB_MENU_KEY.CALLABLES is an Array
+var _added_submenus: Dictionary = {}
 var _open_with_id = 111
 
 var icons: Dictionary = {BASEMENU.NEW_FOLDER: "📁", BASEMENU.NEW_FILE: "📄", BASEMENU.OPEN: "🚀", \
@@ -46,8 +52,8 @@ func _clear_and_add_base_menu():
 	add_separator()
 
 
-func _add_icon_item(id, text, emoji_icon, callable):
-	add_icon_item(_texture_from_text(emoji_icon), text, id)
+func _add_icon_item(id, text, emoji_icon, callable, popup_menu=self):
+	popup_menu.add_icon_item(_texture_from_text(emoji_icon), text, id)
 	_id_callables.set(id, callable)
 
 	
@@ -99,6 +105,15 @@ func pre_popup(new_paths: PackedStringArray):
 			var list_of_menus = _added_menus.get(file_type)
 			for menu: Dictionary in list_of_menus:
 				_add_icon_item(menu.get(MENUPROP.ID), menu.get(MENUPROP.TEXT), menu.get(MENUPROP.EMOJI_ICON), menu.get(MENUPROP.CALLABLE).bind(files))
+	
+	for file_type in _added_submenus:
+		for menu in _added_submenus.get(file_type):
+			var submenu = PopupMenu.new()
+			submenu.id_pressed.connect(_on_id_pressed)
+			for command in menu.get(SUB_MENU_KEY.COMMANDS):
+				var id = ResourceUID.create_id() & 0xFFFFFF  # Guarantee 24bits id
+				_add_icon_item(id, command[MENUPROP.TEXT], command[MENUPROP.EMOJI_ICON], command[MENUPROP.CALLABLE].bind(files), submenu)
+			add_submenu(menu.get(SUB_MENU_KEY.ID), menu.get(SUB_MENU_KEY.TEXT), menu.get(SUB_MENU_KEY.EMOJI_ICON), submenu)
 				
 	# Disable actions when selection multiple files
 	if(new_paths.size() == 1):
@@ -141,7 +156,9 @@ func _on_id_pressed(id: int) -> void:
 		_id_callables[id].call()
 		# Clear added menus
 		for _id in _id_callables:
-			remove_item(get_item_index(_id))
+			var index = get_item_index(_id)
+			if index >= 0:
+				remove_item(index)
 		_id_callables.clear()
 		return
 
@@ -193,7 +210,6 @@ func _on_close_requested(_source: Window) -> void:
 	_id_callables.clear()
 
 	
-enum MENUPROP{TEXT, EMOJI_ICON, CALLABLE, FILETYPE_FLAG, ID}
 func add_menu_command(menu_text: String, emoji_icon: String, action: Callable, menu_for_filetype:FILETYPE_FLAG):
 	var id = ResourceUID.create_id() & 0xFFFFFF  # Guarantee 24bits id
 	var new_menu = {}
@@ -209,10 +225,31 @@ func add_menu_command(menu_text: String, emoji_icon: String, action: Callable, m
 		if menu[0] == new_menu[0]:
 			return
 	_added_menus.get(menu_for_filetype).append(new_menu)
+
+
+func add_sub_menu_command_with_commands(sub_menu_text: String, emoji_icon: String, menu_for_filetype:FILETYPE_FLAG, commands_array=Array()):
+	var id = ResourceUID.create_id() & 0xFFFFFF  # Guarantee 24bits id
+	var new_menu = {}
+	new_menu.set(SUB_MENU_KEY.TEXT, sub_menu_text)
+	new_menu.set(SUB_MENU_KEY.EMOJI_ICON, emoji_icon)
+	new_menu.set(SUB_MENU_KEY.COMMANDS, commands_array)
+	new_menu.set(SUB_MENU_KEY.ID, id)
+	if not _added_submenus.has(menu_for_filetype):
+		_added_submenus.set(menu_for_filetype, [])
 	
+	var menu_list: Array = _added_submenus.get(menu_for_filetype)
+	# Prevent duplicate menus
+	for menu in menu_list:
+		if menu[SUB_MENU_KEY.TEXT] == new_menu[SUB_MENU_KEY.TEXT]:
+			return
+	
+	_added_submenus.get(menu_for_filetype).append(new_menu)
+
+
 func add_submenu(id, text, emoji_icon, popup_menu):
 	add_submenu_node_item(text, popup_menu, id)
 	set_item_icon(get_item_index(id), _texture_from_text(emoji_icon))
+
 
 func get_file_type(absolute_file_path: String)->String:
 	return file_open_with_popup_menu.get_mime_type(absolute_file_path)

@@ -25,6 +25,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+size_flags_vertical = 3
 focus_mode = 2
 script = ExtResource("1_qgpga")
 
@@ -46,7 +47,7 @@ y_sort_enabled = true
 clip_contents = true
 layout_mode = 2
 
-[node name="HFlowContainer" type="HFlowContainer" parent="ScrollContainer/MarginContainer" unique_id=1554125111]
+[node name="HFlowContainer" type="HFlowContainer" parent="ScrollContainer/MarginContainer" unique_id=1811951173]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3

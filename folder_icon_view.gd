@@ -10,7 +10,7 @@ signal folder_changed(folder_path: String)
 
 var _folder_size: float = 64.0
 var _full_directory_path: String
-@onready var _folder_container: HFlowContainer = $ScrollContainer/MarginContainer/HFlowContainer
+@onready var _folder_container: = $ScrollContainer/MarginContainer/HFlowContainer
 @onready var _thread_queue := ThreadQueue.new()
 @onready var ctrl_f_line_edit_plus: LineEditPlus = $CtrlFPanelContainer/HBoxContainer/CtrlFLineEditPlus
 @onready var ctrl_f_exit_button: Button = $CtrlFPanelContainer/HBoxContainer/CtrlFExitButton
@@ -19,7 +19,22 @@ var _full_directory_path: String
 @onready var select_box: SelectBox = $ScrollContainer/MarginContainer/SelectBox
 @onready var margin_container: MarginContainer = $ScrollContainer/MarginContainer
 
+enum IconLayout{MULTI_ROW, SINGLE_ROW, SINGLE_COLUMN}
+
+@export var icon_layout: IconLayout:
+	set(value): _change_layout(value)
 @export var show_hidden_files: bool = true
+
+
+var _sub_menu_commands: Array[Array] = [
+	# Allow inner browser to open new windows through FilePopupMenu
+	["Multi Row", "🧱", _change_layout.bind(IconLayout.MULTI_ROW).unbind(1), FilePopupMenu.FILETYPE_FLAG.ALL],
+	["Single Row", "🚣", _change_layout.bind(IconLayout.SINGLE_ROW).unbind(1), FilePopupMenu.FILETYPE_FLAG.ALL],
+	["Single Column", "🛣️", _change_layout.bind(IconLayout.SINGLE_COLUMN).unbind(1), FilePopupMenu.FILETYPE_FLAG.ALL]
+]
+var _sub_menus: Array[Array] = [
+	["Layout", "📰", FilePopupMenu.FILETYPE_FLAG.ALL, _sub_menu_commands]
+]
 
 const FOLDER = preload("uid://d4fyh375x0gay")
 const FILE_TRANSFER_WINDOW = preload("uid://5bl4nmd56lgq")
@@ -41,6 +56,10 @@ func _ready():
 	margin_container.add_theme_constant_override("margin_left", margin_value)
 	margin_container.add_theme_constant_override("margin_bottom", margin_value)
 	margin_container.add_theme_constant_override("margin_right", margin_value)
+	
+	for menu in _sub_menus:
+		add_sub_menu_command_with_commands.callv(menu)
+	
 
 func files_dropped(files: PackedStringArray):
 	if visible:
@@ -160,11 +179,11 @@ func get_directory() -> String:
 
 # Adds folder to current view. DOES NOT EDIT FILE SYSTEM
 func add_folder_button(folder: FolderLargeIconButton):
-	$ScrollContainer/MarginContainer/HFlowContainer.call_deferred("add_child", folder)
+	_folder_container.call_deferred("add_child", folder)
 
 # Returns an array of all folders/files buttons
 func get_folder_buttons() -> Array[Node]:
-	return self._folder_container.get_children() if _folder_container else []
+	return _folder_container.get_children() if _folder_container else []
 
 # Change current directoy, removes all icons and adds icons for full_path
 func set_directory(full_path: String):
@@ -180,8 +199,11 @@ func _actual_set_directory(full_path: String):
 func refresh():
 	# Remove current directory content
 	clear()
+	# Avoid loading empty dir (Godot loads res://)
+	if not _full_directory_path:
+		return
 	# Add folders to view
-	var dir_access = DirAccess.open(self._full_directory_path)
+	var dir_access = DirAccess.open(_full_directory_path)
 	if dir_access:
 		dir_access.include_hidden = show_hidden_files
 		for directory in dir_access.get_directories():
@@ -435,5 +457,33 @@ func _on_file_clicked(file_path: String) -> void:
 func add_menu_command(menu_text: String, emoji_icon: String, action: Callable, menu_for_filetype: FilePopupMenu.FILETYPE_FLAG):
 	$FilePopupMenu.add_menu_command(menu_text, emoji_icon, action, menu_for_filetype)
 
+func add_sub_menu_command_with_commands(sub_menu_text: String, emoji_icon: String, menu_for_filetype:FilePopupMenu.FILETYPE_FLAG, commands_array=Array()):
+	$FilePopupMenu.add_sub_menu_command_with_commands(sub_menu_text, emoji_icon, menu_for_filetype, commands_array)
+
 func get_popup_menus():
 	return [file_popup_menu]
+
+
+func _change_layout(layout_type: IconLayout):
+	# Objects must be created by ready in order to be replaced
+	if not is_node_ready():
+		await ready
+	var new_control
+	match layout_type:
+		IconLayout.MULTI_ROW:
+			new_control = HFlowContainer.new()
+		IconLayout.SINGLE_ROW:
+			new_control = HBoxContainer.new()
+		IconLayout.SINGLE_COLUMN:
+			new_control = VBoxContainer.new()
+	
+	var old_control = _folder_container
+	old_control.replace_by(new_control)
+	_folder_container = new_control
+	await RenderingServer.frame_post_draw
+	old_control.queue_free()
+	#_folder_container.add_sibling(new_control)
+	#_folder_container.queue_free()
+	_folder_container = new_control
+
+	#refresh()
