@@ -117,18 +117,25 @@ func _unhandled_input(event: InputEvent) -> void:
 	
 	# Delete selected files on "Delete" key
 	if event is InputEventKey and Input.is_key_pressed(KEY_DELETE) and \
-	# Multiple FileTrees may be available, only affect focused File Tree
 	not event.is_echo() and has_focus():
 		var selected = PackedStringArray(get_selected_paths())
 		if selected:
 			$TrashFileConfirmationDialog.ask_trash_files(selected)
 	
 	if event is InputEventKey and Input.is_key_pressed(KEY_A) and Input.is_key_pressed(KEY_CTRL) and\
-	# Multiple FileTrees may be available, only affect focused File Tree
 	not event.is_echo() and has_focus():
 		select_all()
 		accept_event()
-
+	
+	if event is InputEventKey and Input.is_key_pressed(KEY_PAGEDOWN) and\
+	not event.is_echo() and has_focus():
+		$ScrollContainer.set_deferred("scroll_vertical", $ScrollContainer.scroll_vertical + $ScrollContainer.size.y)
+		accept_event()
+	
+	if event is InputEventKey and Input.is_key_pressed(KEY_PAGEUP) and\
+	not event.is_echo() and has_focus():
+		$ScrollContainer.set_deferred("scroll_vertical", $ScrollContainer.scroll_vertical - $ScrollContainer.size.y)
+		accept_event()
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.is_pressed():
