@@ -12,7 +12,7 @@ var _folder_size: float = 64.0
 var _full_directory_path: String
 @onready var _folder_container: = $ScrollContainer/MarginContainer/HFlowContainer
 @onready var _thread_queue := ThreadQueue.new()
-@onready var ctrl_f_line_edit_plus: LineEditPlus = $CtrlFPanelContainer/HBoxContainer/CtrlFLineEditPlus
+@onready var ctrl_f_line_edit_plus: LineEdit = $CtrlFPanelContainer/HBoxContainer/CtrlFLineEdit
 @onready var ctrl_f_exit_button: Button = $CtrlFPanelContainer/HBoxContainer/CtrlFExitButton
 @onready var ctrl_f_panel_container: PanelContainer = $CtrlFPanelContainer
 @onready var file_popup_menu: PopupMenu = $FilePopupMenu

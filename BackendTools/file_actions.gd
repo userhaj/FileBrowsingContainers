@@ -45,6 +45,7 @@ static func _copy(files: PackedStringArray, target_folder: String, percent_callb
 				# Overwrite old file
 				FileResponseRequest.OVERWRITE:
 					pass
+					
 		# Recursively copy all folders
 		if not is_file:
 			# Copy Internal Files
@@ -52,7 +53,7 @@ static func _copy(files: PackedStringArray, target_folder: String, percent_callb
 			var target_dirs = all_dirs.duplicate()
 			replace_array(file, target_location, target_dirs)
 			for index in range(len(all_dirs)):
-				copy_files(all_dirs[index], target_dirs[index])
+				copy_files(all_dirs[index], target_dirs[index], is_move)
 
 		if is_file: # File copy action
 			var dir_access := DirAccess.open(target_folder)
@@ -71,7 +72,9 @@ static func _copy(files: PackedStringArray, target_folder: String, percent_callb
 			# Delete all original copied files if there are no errors
 			if error_sum == 0:
 				# Copy/Move success
-				pass
+				if is_move:
+					# TODO Change to DirAccess.remove(file) if you trust move
+					OS.move_to_trash(file)
 		# Notify completion percent
 		files_complete += 1.0
 		percent_callback.call_deferred(files_complete / file_count)
@@ -137,9 +140,13 @@ static func replace_array(what: String, forwhat: String, array: Array[String]):
 
 # Shallow copy just files from one folder to target
 static func copy_files(originating_dir: String, target_dir: String, is_move: bool=false)-> Array[Error]:
-	if not DirAccess.dir_exists_absolute(target_dir):
-		DirAccess.make_dir_recursive_absolute(target_dir)
 	var errors: Array[Error] = []
+	if not DirAccess.dir_exists_absolute(target_dir):
+		var dir_err = DirAccess.make_dir_recursive_absolute(target_dir)
+		errors.append(dir_err)
+		# Fail immediately on target folder creation
+		if dir_err != OK:
+			return errors
 	var dir_access := DirAccess.open(originating_dir)
 	for file in dir_access.get_files():
 		var err

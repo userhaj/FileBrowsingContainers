@@ -3,19 +3,18 @@
 [ext_resource type="Script" uid="uid://cf281dx06gmp1" path="res://FileBrowser/FileBrowsingContainers/folder_icon_view.gd" id="1_qgpga"]
 [ext_resource type="PackedScene" uid="uid://drjwj2xhyocps" path="res://FileBrowser/FileBrowsingContainers/Components/select_box.tscn" id="2_q4s0j"]
 [ext_resource type="PackedScene" uid="uid://behydyevo5qgt" path="res://FileBrowser/FileBrowsingContainers/Components/file_popup_menu.tscn" id="6_ge0n4"]
-[ext_resource type="Script" uid="uid://cvbxs2ydf6ksb" path="res://FeatureAddedObjects/line_edit_plus.gd" id="6_ispsu"]
 [ext_resource type="PackedScene" uid="uid://dftwbc3ldxac1" path="res://FileBrowser/FileBrowsingContainers/ConfirmationDialogs/run_file_confirmation_dialog.tscn" id="7_ge0n4"]
 [ext_resource type="Script" uid="uid://benc4ab4rkgll" path="res://FileBrowser/FileBrowsingContainers/BackendTools/folder_poller.gd" id="8_2xlx7"]
 [ext_resource type="Script" uid="uid://diba812tgfd22" path="res://FileBrowser/FileBrowsingContainers/BackendTools/file_browsing_controller.gd" id="9_bs7u3"]
 [ext_resource type="PackedScene" uid="uid://drat35vjn1jey" path="res://FileBrowser/FileBrowsingContainers/ConfirmationDialogs/trash_file_confirmation_dialog.tscn" id="9_wj301"]
 
-[sub_resource type="ViewportTexture" id="ViewportTexture_dlewc"]
+[sub_resource type="ViewportTexture" id="ViewportTexture_2ac70"]
 viewport_path = NodePath("SubViewportFolder")
 
-[sub_resource type="ViewportTexture" id="ViewportTexture_wj301"]
+[sub_resource type="ViewportTexture" id="ViewportTexture_dlewc"]
 viewport_path = NodePath("SubViewportFile")
 
-[sub_resource type="ViewportTexture" id="ViewportTexture_bs7u3"]
+[sub_resource type="ViewportTexture" id="ViewportTexture_wj301"]
 viewport_path = NodePath("SubViewportTrash")
 
 [node name="FolderIconView" type="Control" unique_id=475031514]
@@ -65,11 +64,9 @@ grow_horizontal = 0
 [node name="HBoxContainer" type="HBoxContainer" parent="CtrlFPanelContainer" unique_id=1539999094]
 layout_mode = 2
 
-[node name="CtrlFLineEditPlus" type="LineEdit" parent="CtrlFPanelContainer/HBoxContainer" unique_id=655140013]
+[node name="CtrlFLineEdit" type="LineEdit" parent="CtrlFPanelContainer/HBoxContainer" unique_id=26789130]
 layout_mode = 2
 size_flags_horizontal = 3
-script = ExtResource("6_ispsu")
-metadata/_custom_type_script = "uid://cvbxs2ydf6ksb"
 
 [node name="CtrlFExitButton" type="Button" parent="CtrlFPanelContainer/HBoxContainer" unique_id=2096943317]
 layout_mode = 2
@@ -77,9 +74,9 @@ size_flags_horizontal = 8
 text = "x"
 
 [node name="FilePopupMenu" parent="." unique_id=1803370902 instance=ExtResource("6_ge0n4")]
-item_0/icon = SubResource("ViewportTexture_dlewc")
-item_1/icon = SubResource("ViewportTexture_wj301")
-item_3/icon = SubResource("ViewportTexture_bs7u3")
+item_0/icon = SubResource("ViewportTexture_2ac70")
+item_1/icon = SubResource("ViewportTexture_dlewc")
+item_3/icon = SubResource("ViewportTexture_wj301")
 
 [node name="RunFileConfirmationDialog" parent="." unique_id=381305560 instance=ExtResource("7_ge0n4")]
 
@@ -96,6 +93,6 @@ metadata/_custom_type_script = "uid://diba812tgfd22"
 [connection signal="file_clicked" from="." to="." method="_on_file_clicked"]
 [connection signal="folder_changed" from="." to="FolderPoller" method="only_poll_folder"]
 [connection signal="selected_area" from="ScrollContainer/MarginContainer/SelectBox" to="." method="select_children_by_area"]
-[connection signal="text_changed" from="CtrlFPanelContainer/HBoxContainer/CtrlFLineEditPlus" to="." method="_on_ctrl_f_line_edit_plus_text_changed"]
+[connection signal="text_changed" from="CtrlFPanelContainer/HBoxContainer/CtrlFLineEdit" to="." method="_on_ctrl_f_line_edit_plus_text_changed"]
 [connection signal="folder_changed" from="FolderPoller" to="." method="refresh" unbinds=1]
 [connection signal="change_directory" from="FileBrowsingController" to="." method="_actual_set_directory"]
