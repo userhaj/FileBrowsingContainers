@@ -137,7 +137,10 @@ func set_tree_item_font_size(value: int):
 	_tree_item_font_size = value
 	
 	for tree_item: TreeItem in _get_all_tree_items():
-		tree_item.set_icon_max_width.call_deferred(0,value)
+		tree_item.set_icon_max_width(0,1)
+		
+		var max_height = get_item_area_rect(tree_item).size.y
+		tree_item.set_icon_max_width.call_deferred(0,max_height)
 	
 	await get_tree().process_frame
 	edit_theme = ThemeDB.get_project_theme()
@@ -294,7 +297,7 @@ func _ready():
 		icon_textures.set(icon, null)
 	var icon_font = edit_theme.get_font("font", "EmojiFont")
 	icon_font = icon_font if icon_font else get_theme_default_font()
-	var render_images= TextRenderer.batch_text_to_image(icon_textures.keys(), icon_font, 64)
+	var render_images= TextRenderer.batch_text_to_image(icon_textures.keys(), icon_font, 128)
 	var count = 0
 	for icon in icon_textures.keys():
 		icon_textures.set(icon, ImageTexture.create_from_image(render_images[count]))
@@ -398,7 +401,7 @@ func refresh():
 					# Guarantee current refresh is latest
 					if _refresh_id != this_refresh_id:
 						return
-					_create_folder.call_deferred(tree_root, _full_directory_path.path_join(directory))
+					_add_path_to_tree.call_deferred(tree_root, _full_directory_path.path_join(directory))
 					count += 1
 		
 		if show_files:
@@ -412,7 +415,7 @@ func refresh():
 					# Guarantee current refresh is latest
 					if _refresh_id != this_refresh_id: 
 						return
-					_create_file.call_deferred(tree_root, _full_directory_path.path_join(file))
+					_add_path_to_tree.call_deferred(tree_root, _full_directory_path.path_join(file))
 					count += 1
 					
 		
@@ -503,14 +506,15 @@ func _add_sub_folder(tree_item: TreeItem):
 				var full_path = path.path_join(file_name)
 				# If folder, create TreeItem folder
 				if show_folders and DirAccess.dir_exists_absolute(full_path):
-					_create_folder.call_deferred(tree_item, full_path)
+					_add_path_to_tree.call_deferred(tree_item, full_path)
 				elif show_files and FileAccess.file_exists(full_path):
-					_create_file.call_deferred(tree_item, full_path)
+					_add_path_to_tree.call_deferred(tree_item, full_path)
 				# Check next folder
 				file_name = dir.get_next()
 
-# Create a TreeItem folder on given TreeItem
-func _create_folder(base_tree_item, full_path: String, label_full_path: bool=false):
+
+# Create a TreeItem for given path on given base TreeItem
+func _add_path_to_tree(base_tree_item, full_path: String, label_full_path: bool=false):
 	if base_tree_item:
 		# Create folder TreeItem with saved path
 		var new_tree_item: TreeItem = create_item(base_tree_item)
@@ -520,70 +524,29 @@ func _create_folder(base_tree_item, full_path: String, label_full_path: bool=fal
 			label_text = "/"
 		new_tree_item.set_text(0, label_text) # On folders get_file() gets last folder name
 		new_tree_item.set_metadata(0, full_path)
-		var dirAcc = DirAccess.open(full_path)
-		var folder_contents_count = 0
-		if dirAcc:
-			dirAcc.include_hidden = true
-			var dir_count = dirAcc.get_directories().size()
-			var file_count = dirAcc.get_files().size()
-			folder_contents_count = dir_count + file_count
-			
-			# Set size column size
-			var size_column_index = column_titles.find(column_titles[column.SIZE])
-			if size_column_index >= 0 and size_column_index < columns: # Only set size if it exists
-				new_tree_item.set_text(size_column_index, str(folder_contents_count)+" objects")
-				
-			# Set date modified column
-			var date_modified = FileAccess.get_modified_time(full_path)
-			var date_modified_column_index = column_titles.find(column_titles[column.DATE_MODIFIED])
-			if date_modified_column_index >= 0 and date_modified_column_index < columns: # Only set size if it exists
-				new_tree_item.set_text(date_modified_column_index, Time.get_datetime_string_from_unix_time(date_modified, true))
-			
-			# Set date accessed column
-			var date_accessed = FileAccess.get_access_time(full_path)
-			var date_accessed_column_index = column_titles.find(column_titles[column.ACCESSED])
-			if date_accessed_column_index >= 0 and date_accessed_column_index < columns: # Only set size if it exists
-				new_tree_item.set_text(date_accessed_column_index, Time.get_datetime_string_from_unix_time(date_accessed, true))
-			
-		# Set type column
-		var type_column_index = column_titles.find(column_titles[column.TYPE])
-		if type_column_index >= 0 and type_column_index < columns: # Only set size if it exists
-			new_tree_item.set_text(type_column_index, "Folder")
-		
-		# Set Icon
-		var icon_emoji = "📁"
-		#_icons_used.set(icon_emoji, 0)
-		#var subview = SubViewPortSingleLabel.get_make(icon_emoji, self)
-		#subview.resize(Vector2(tree_item_font_size, tree_item_font_size))
-		#new_tree_item.set_icon(0, subview.get_texture())
-		new_tree_item.set_icon(0, icon_textures.get(icon_emoji))
-		new_tree_item.set_icon_max_width(0, tree_item_font_size)
-		
-		
-		# Create place holder item on folders with sub-content
-		if folder_contents_count > 0:
-			create_item(new_tree_item)
-		
-		# Uncollapse if saved as open folder
-		new_tree_item.collapsed = _fold_structure.get(full_path, true)
-		
-		# Optional no-trim of folder/file names
-		if always_fit_name:
-			new_tree_item.set_text_overrun_behavior(0, TextServer.OVERRUN_NO_TRIMMING)
 
-# Create a TreeItem file on given TreeItem
-func _create_file(base_tree_item, full_path: String):
-	if base_tree_item:
-		# Create folder TreeItem with saved path
-		var new_tree_item: TreeItem = create_item(base_tree_item)
-		new_tree_item.collapsed = true
-		new_tree_item.set_text(0, full_path.get_file()) # On folders get_file() gets last folder name
-		new_tree_item.set_metadata(0, full_path)
-		var file_size := FileAccess.get_size(full_path)
-		# Ignore -1 error and report as 0 bytes
-		file_size = file_size if file_size >= 0 else 0
-		new_tree_item.set_text(column.SIZE, str(file_size) + " bytes")
+		var is_folder = DirAccess.dir_exists_absolute(full_path)
+
+		var file_size
+		if is_folder:
+			var dirAcc = DirAccess.open(full_path)
+			if dirAcc:
+				dirAcc.include_hidden = true
+				var dir_count = dirAcc.get_directories().size()
+				var file_count = dirAcc.get_files().size()
+				file_size = dir_count + file_count
+		else:
+			file_size = FileAccess.get_size(full_path)
 		
+		# Catch all on errors, happens on lack of file permission
+		file_size = file_size if file_size else 0
+			
+		# Set size column size
+		var size_column_index = column_titles.find(column_titles[column.SIZE])
+		if size_column_index >= 0 and size_column_index < columns: # Only set size if it exists
+			var size_type_str = " objects" if is_folder else " bytes"
+			new_tree_item.set_text(size_column_index, str(file_size)+ size_type_str)
+			
 		# Set date modified column
 		var date_modified = FileAccess.get_modified_time(full_path)
 		var date_modified_column_index = column_titles.find(column_titles[column.DATE_MODIFIED])
@@ -596,28 +559,40 @@ func _create_file(base_tree_item, full_path: String):
 		if date_accessed_column_index >= 0 and date_accessed_column_index < columns: # Only set size if it exists
 			new_tree_item.set_text(date_accessed_column_index, Time.get_datetime_string_from_unix_time(date_accessed, true))
 			
-		
 		# Set type column
 		var type_column_index = column_titles.find(column_titles[column.TYPE])
-		if type_column_index >= 0 and type_column_index < columns: # Only set size if it exists
-			new_tree_item.set_text.call_deferred(column_titles.find(column_titles[column.TYPE]), full_path.get_extension() )
-			
+		if type_column_index >= 0 and type_column_index < columns: # Only set type col if it exists
+			if is_folder:
+				new_tree_item.set_text.call_deferred(type_column_index, "Folder")
+			else:
+				new_tree_item.set_text.call_deferred(column_titles.find(column_titles[column.TYPE]), full_path.get_extension() )
 		
-		# Find icon to use based on extension
-		var ext: String = full_path.get_extension()
-		var icon_emoji: String = icons.get(ext, "📄")
-		
-		#_icons_used.set(icon_emoji, 0)
-		#var subview = SubViewPortSingleLabel.get_make(icon_emoji, self)
-		#subview.resize(Vector2(tree_item_font_size, tree_item_font_size))
-		#new_tree_item.set_icon(0, subview.get_texture())
-		new_tree_item.set_icon(0, icon_textures.get(icon_emoji))
-		new_tree_item.set_icon_max_width(0, tree_item_font_size)
-		
+		# Set Icon
+		var icon_emoji = "📁"
+		if not is_folder:
+			# Find icon to use based on extension
+			var ext: String = full_path.get_extension()
+			icon_emoji = icons.get(ext, "📄")
 
+		new_tree_item.set_icon(0, icon_textures.get(icon_emoji))
+		# Minmize icon
+		new_tree_item.set_icon_max_width(0,1)
+		# Get height of treeitem without icon
+		var max_height = get_item_area_rect(new_tree_item).size.y
+		# Set icon to same height as treeitem
+		new_tree_item.set_icon_max_width.call_deferred(0,max_height)
+		
+		
+		# Create place holder item on folders with sub-content
+		if is_folder and file_size > 0:
+			create_item(new_tree_item)
+		
+		# Uncollapse if saved as open folder
+		new_tree_item.collapsed = _fold_structure.get(full_path, true)
+		
+		# Optional no-trim of folder/file names
 		if always_fit_name:
 			new_tree_item.set_text_overrun_behavior(0, TextServer.OVERRUN_NO_TRIMMING)
-
 
 
 func _on_column_title_clicked(_column: int, mouse_button_index: int) -> void:
@@ -677,6 +652,7 @@ func _on_item_activated() -> void:
 		$RunFileConfirmationDialog.position = get_screen_transform() * get_local_mouse_position()
 		$RunFileConfirmationDialog.popup()
 
+
 func _get_drag_data(at_position: Vector2) -> Variant:
 	# If drag started at nothing, do nothing
 	if not get_item_at_position(at_position):
@@ -699,7 +675,6 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 			# Prevent drag data when clicking in empty space to right of text
 			if at_position.x > after_text:
 				return null
-		
 		
 	# Get selected folders/files
 	var selected: Array[TreeItem] = get_selected_tree_items()
@@ -736,6 +711,7 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 			return PackedStringArray(folders)
 	return null
 
+
 # Prevent cancel mouse icon
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 	# Verify paths are being dragged, and allow dropping
@@ -748,11 +724,13 @@ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 		return true
 	return false
 
+
 func _drop_data(_at_position: Vector2, data: Variant) -> void:
 	# Hand-off dropping to OS
 	if typeof(data) == TYPE_PACKED_STRING_ARRAY:
 		get_window().emit_signal("files_dropped", data)
 	
+
 
 func path_from_TreeItem(given_item: TreeItem) -> String:
 	var path = given_item.get_metadata(0)
@@ -760,8 +738,10 @@ func path_from_TreeItem(given_item: TreeItem) -> String:
 		return path
 	return ""
 
+
 func set_path_on_TreeItem(tree_item: TreeItem, new_path: String):
 	tree_item.set_metadata(0, new_path)
+
 
 # Returns Array of paths in current directory
 func get_selected_paths() -> Array[String]:
@@ -771,6 +751,7 @@ func get_selected_paths() -> Array[String]:
 		if child:
 			all_paths.append(path_from_TreeItem(child))
 	return all_paths
+
 
 # Location of file/folders in gui
 func get_global_file_area_rect() -> Rect2:
@@ -787,6 +768,7 @@ func get_global_file_area_rect() -> Rect2:
 	file_rect.size.x -= bar_width
 	
 	return file_rect
+
 
 func _get_title_row_height() -> int:
 	if not get_root():
@@ -807,6 +789,7 @@ func _get_v_scroll_bar_width() -> int:
 	remove_child(temp_scroll)
 	return style_box.content_margin_left + style_box.content_margin_right
 
+
 # The sets tree to OS level drives available. See DirAccess.get_drive_name()
 func show_default_os_drives():
 	# Remove current directory content
@@ -818,7 +801,7 @@ func show_default_os_drives():
 	var drive_count = DirAccess.get_drive_count()
 	for drive_index in range(drive_count):
 		var drive_name = DirAccess.get_drive_name(drive_index)
-		_create_folder.call_deferred(tree_root, drive_name)
+		_add_path_to_tree.call_deferred(tree_root, drive_name)
 		$FolderPoller.add_folder_to_poll(drive_name)
 
 
@@ -858,10 +841,12 @@ func _on_item_edited() -> void:
 				else:
 					tree_item.set_text(column.NAME, true_object_name)
 
+
 func add_menu_command(menu_text: String, emoji_icon: String, action: Callable, menu_for_filetype:FilePopupMenu.FILETYPE_FLAG):
 	if not is_node_ready():
 		await ready
 	file_popup_menu.add_menu_command(menu_text, emoji_icon, action, menu_for_filetype)
+
 
 func get_popup_menus():
 	return [file_popup_menu, $PopupMenu]
