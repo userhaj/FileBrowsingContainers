@@ -63,6 +63,8 @@ var icons : Dictionary = {"dll": "📚", "txt": "🗒️", "exe": "🚀", "conf"
 
 var icon_textures = {}
 
+const DEFAULT_ICON_SIZE = Vector2(256,256)
+
 const FILE_TRANSFER_WINDOW = preload("uid://5bl4nmd56lgq")
 
 
@@ -241,9 +243,6 @@ func _gui_input(event: InputEvent) -> void:
 	# Set resize cursor if near title column end
 	if event is InputEventMouse and not event.is_pressed():
 		mouse_default_cursor_shape = Control.CURSOR_HSIZE if _column_title_end_near() >= 0 else Control.CURSOR_ARROW
-	
-	
-		
 
 
 # Returns the column index that the mouse is nearest to the end of. Or -1 if not near a column title end
@@ -582,6 +581,9 @@ func _add_path_to_tree(base_tree_item, full_path: String, label_full_path: bool=
 		# Set icon to same height as treeitem
 		new_tree_item.set_icon_max_width.call_deferred(0,max_height)
 		
+		if is_image_extension(full_path.get_extension()):
+			WorkerThreadPool.add_task(_apply_image_icon.bind(new_tree_item, full_path, DEFAULT_ICON_SIZE))
+		
 		
 		# Create place holder item on folders with sub-content
 		if is_folder and file_size > 0:
@@ -887,4 +889,28 @@ func _get_fold_width(tree_item: TreeItem):
 			parent = parent.get_parent()
 		
 		return level * (margin + fold_arrow_width)
-	
+
+
+static func is_image_extension(extension: String):
+	return extension.to_lower() in ["png", "svg", "bmp", "jpg", "jpeg", "ktx", "tga", "webp"]
+
+
+func _apply_image_icon(tree_item:TreeItem, image_path: String, icon_size: Vector2):
+	var img = Image.load_from_file(image_path)
+	if not img:
+		return
+	var img_size = img.get_size()
+	var height
+	var width
+	if img_size.y > img_size.x:
+		width = ceil(float(img_size.x) * float(icon_size.y) / img_size.y)
+		height = icon_size.y
+	else:
+		width = icon_size.x
+		height = ceil(float(img_size.y) * float(icon_size.x) / img_size.x)
+		
+	img.resize(width, height)
+	var icon_texture = ImageTexture.create_from_image(img)
+	if tree_item:
+		tree_item.set_icon.call_deferred(0, icon_texture)
+		
