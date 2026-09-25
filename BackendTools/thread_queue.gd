@@ -24,7 +24,7 @@ var _available_threads = range(max_thread_count).map(func(_a): return Thread.new
 
 
 # Add Callable a queue. callback_content must take single argument of call_work return type
-func enqueue(call_work: Callable, callback_content:Callable):
+func enqueue(call_work: Callable, callback_content:Callable = Callable()):
 	var thread = _available_threads.pop_front()
 	thread_queue.push_back(thread)
 	bind_queue.push_back(_thread_return_work.bind(thread, call_work, callback_content))
@@ -53,7 +53,7 @@ func remove(queue_number: int):
 	mutex.unlock()
 
 # Runs work, then calls cleanup methods
-func _thread_return_work(thread, call_work: Callable, callback_content):
+func _thread_return_work(thread, call_work, callback_content):
 	# Work may be null/stale, validate before calling
 	if call_work and call_work.is_valid():
 		var work = await call_work.call()

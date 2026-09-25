@@ -15,9 +15,12 @@ class_name FileTree
 @export var only_show_drives: bool = false
 @export var always_fit_name: bool = false
 @export var show_hidden_files: bool = true
+@export_range(0.0, 1.0, 0.001) var alternate_row_bg_highlight = 0.025
 @onready var file_popup_menu: PopupMenu = $FilePopupMenu
 
 signal folder_changed(folder_path: String)
+signal sorted
+signal path_added
 @onready var old_min_width = {0:128, 1: 128}
 var _full_directory_path: String
 var tree_root: TreeItem
@@ -43,6 +46,7 @@ var _tree_item_font_size = 0
 var tree_item_font_size :int :
 	set(value): set_tree_item_font_size(value)
 	get: return _tree_item_font_size
+@onready var thread_queue := ThreadQueue.new()
 
 var _is_tree_item_selected_before_click: bool = false
 
@@ -78,7 +82,7 @@ func folder_at_mouse() -> String:
 			path = _full_directory_path
 	# Normal drop on file or folder
 	else:
-		path = item.get_metadata(0)
+		path = item.get_metadata(0)["path"]
 	# Guarantee folder path (Not a file)
 	if path and FileAccess.file_exists(path):
 		path = path.get_base_dir()
@@ -139,10 +143,15 @@ func set_tree_item_font_size(value: int):
 	_tree_item_font_size = value
 	
 	for tree_item: TreeItem in _get_all_tree_items():
-		tree_item.set_icon_max_width(0,1)
+		tree_item.set_icon_region(0, Rect2(0,0,1,1))
+		
 		
 		var max_height = get_item_area_rect(tree_item).size.y
+		tree_item.set_icon_region(0, Rect2())
 		tree_item.set_icon_max_width.call_deferred(0,max_height)
+		var tree_texture = get_texture_on_TreeItem(tree_item, 0)
+		if tree_texture:
+			tree_item.set_icon(0, padded_ratio_resize_texture(tree_texture, Vector2(max_height, max_height)))
 	
 	await get_tree().process_frame
 	edit_theme = ThemeDB.get_project_theme()
@@ -362,6 +371,7 @@ func _fill_fold(tree_item: TreeItem):
 	
 # Clears Children, Adds folder/files based on current directory
 func refresh():
+	thread_queue.clear()
 	var this_refresh_id = randi()
 	_refresh_id = this_refresh_id
 	
@@ -392,30 +402,30 @@ func refresh():
 			var dir_access = DirAccess.open(self._full_directory_path)
 			if dir_access:
 				dir_access.include_hidden = show_hidden_files
-				var count = 0
+				#var count = 0
 				for directory in dir_access.get_directories():
 					# Prevent frame drop on loop
-					if not count % 100:
-						await RenderingServer.frame_post_draw
+					#if not count % 100:
+						#await RenderingServer.frame_post_draw
 					# Guarantee current refresh is latest
 					if _refresh_id != this_refresh_id:
 						return
-					_add_path_to_tree.call_deferred(tree_root, _full_directory_path.path_join(directory))
-					count += 1
+					thread_queue.enqueue(_add_path_to_tree.call_deferred.bind(tree_root, _full_directory_path.path_join(directory)))
+					#count += 1
 		
 		if show_files:
 			var dir_access = DirAccess.open(self._full_directory_path)
 			if dir_access:
 				dir_access.include_hidden = show_hidden_files
-				var count = 0
+				#var count = 0
 				for file in dir_access.get_files():
-					if not count % 100:
-						await RenderingServer.frame_post_draw
+					#if not count % 100:
+						#await RenderingServer.frame_post_draw
 					# Guarantee current refresh is latest
 					if _refresh_id != this_refresh_id: 
 						return
-					_add_path_to_tree.call_deferred(tree_root, _full_directory_path.path_join(file))
-					count += 1
+					thread_queue.enqueue(_add_path_to_tree.call_deferred.bind(tree_root, _full_directory_path.path_join(file)))
+					#count += 1
 					
 		
 		# Sort again on refresh
@@ -424,6 +434,7 @@ func refresh():
 	# Set scroll to where it was recorded before
 	if scroll_to_path:
 		_scroll_vector2_near_path.call_deferred(original_scroll, scroll_to_path)
+
 
 
 # Godot only allows scrolling to items, no manual control of scroll bar
@@ -446,6 +457,11 @@ func _tree_item_from_path(filepath: String)->TreeItem:
 	return tree_item
 
 func _sort_tree(tree_item, sort_column: int, is_ascending: bool=true):
+	_sort_tree_work(tree_item, sort_column, is_ascending)
+	sorted.emit()
+	
+
+func _sort_tree_work(tree_item, sort_column: int, is_ascending: bool=true):
 	# default to first column if incorrect column given
 	sort_column = sort_column if sort_column < columns else 0
 	if tree_item:
@@ -459,7 +475,7 @@ func _sort_tree(tree_item, sort_column: int, is_ascending: bool=true):
 		
 		for child in items:
 			if child is TreeItem:
-				_sort_tree(child, sort_column, is_ascending)
+				_sort_tree_work(child, sort_column, is_ascending)
 
 
 # Returns list of expanded folders in tree
@@ -473,7 +489,7 @@ func _expanded_folders(tree_item: TreeItem, array: Array):
 	var next: TreeItem = tree_item.get_next_visible() if tree_item else null
 	if next:
 		if not next.collapsed:
-			array.append(next.get_metadata(0))
+			array.append(next.get_metadata(0)["path"])
 		_expanded_folders(next, array)
 
 func _on_item_collapsed(item:TreeItem):
@@ -490,11 +506,14 @@ func _on_item_collapsed(item:TreeItem):
 		var folder_path = path_from_TreeItem(item)
 		if folder_path:
 			$FolderPoller.erase(folder_path)
+			
+	# Potentially lost/gained
+	$TreeAddedTimer.start()
 
 
 func _add_sub_folder(tree_item: TreeItem):
 	# Create TreeItems for all subfolders of given TreeItem
-	var path = tree_item.get_metadata(0)
+	var path = tree_item.get_metadata(0)["path"]
 	if path:
 		var dir = DirAccess.open(path)
 		if dir:
@@ -505,9 +524,9 @@ func _add_sub_folder(tree_item: TreeItem):
 				var full_path = path.path_join(file_name)
 				# If folder, create TreeItem folder
 				if show_folders and DirAccess.dir_exists_absolute(full_path):
-					_add_path_to_tree.call_deferred(tree_item, full_path)
+					thread_queue.enqueue(_add_path_to_tree.call_deferred.bind(tree_item, full_path))
 				elif show_files and FileAccess.file_exists(full_path):
-					_add_path_to_tree.call_deferred(tree_item, full_path)
+					thread_queue.enqueue(_add_path_to_tree.call_deferred.bind(tree_item, full_path))
 				# Check next folder
 				file_name = dir.get_next()
 
@@ -522,7 +541,7 @@ func _add_path_to_tree(base_tree_item, full_path: String, label_full_path: bool=
 		if label_text == "": # Unix / has no folder name
 			label_text = "/"
 		new_tree_item.set_text(0, label_text) # On folders get_file() gets last folder name
-		new_tree_item.set_metadata(0, full_path)
+		set_path_on_TreeItem(new_tree_item, full_path)
 
 		var is_folder = DirAccess.dir_exists_absolute(full_path)
 
@@ -582,7 +601,7 @@ func _add_path_to_tree(base_tree_item, full_path: String, label_full_path: bool=
 		new_tree_item.set_icon_max_width.call_deferred(0,max_height)
 		
 		if is_image_extension(full_path.get_extension()):
-			WorkerThreadPool.add_task(_apply_image_icon.bind(new_tree_item, full_path, DEFAULT_ICON_SIZE))
+			thread_queue.enqueue(_apply_image_icon.bind(new_tree_item, full_path, Vector2(max_height, max_height)))
 		
 		
 		# Create place holder item on folders with sub-content
@@ -595,6 +614,8 @@ func _add_path_to_tree(base_tree_item, full_path: String, label_full_path: bool=
 		# Optional no-trim of folder/file names
 		if always_fit_name:
 			new_tree_item.set_text_overrun_behavior(0, TextServer.OVERRUN_NO_TRIMMING)
+			
+		path_added.emit()
 
 
 func _on_column_title_clicked(_column: int, mouse_button_index: int) -> void:
@@ -644,7 +665,7 @@ func _on_item_activated() -> void:
 	
 	# Action if single folder was activated
 	if selected.size() == 1:
-		var full_path = selected[0].get_metadata(0)
+		var full_path = selected[0].get_metadata(0)["path"]
 		if full_path and DirAccess.dir_exists_absolute(full_path):
 			set_directory(full_path)
 			return
@@ -735,14 +756,33 @@ func _drop_data(_at_position: Vector2, data: Variant) -> void:
 
 
 func path_from_TreeItem(given_item: TreeItem) -> String:
-	var path = given_item.get_metadata(0)
+	var meta_dictionary = given_item.get_metadata(0)
+	meta_dictionary = meta_dictionary if meta_dictionary else {}
+	var path = meta_dictionary.get("path")
 	if path:
 		return path
 	return ""
 
 
 func set_path_on_TreeItem(tree_item: TreeItem, new_path: String):
-	tree_item.set_metadata(0, new_path)
+	var meta_dictionary = tree_item.get_metadata(0)
+	meta_dictionary = meta_dictionary if meta_dictionary else {}
+	meta_dictionary["path"] = new_path
+	tree_item.set_metadata(0, meta_dictionary)
+
+static func save_texture_on_TreeItem(tree_item: TreeItem, set_column: int, new_texture: Texture):
+	var meta_dictionary = tree_item.get_metadata(set_column) if tree_item else null
+	meta_dictionary = meta_dictionary if meta_dictionary else {}
+	meta_dictionary["texture"] = new_texture
+	if tree_item:
+		tree_item.set_metadata(set_column, meta_dictionary)
+
+static func get_texture_on_TreeItem(tree_item: TreeItem, set_column: int):
+	var meta_dictionary = tree_item.get_metadata(set_column)
+	if meta_dictionary:
+		return meta_dictionary.get("texture")
+	return Texture2D.new()
+	
 
 
 # Returns Array of paths in current directory
@@ -895,22 +935,65 @@ static func is_image_extension(extension: String):
 	return extension.to_lower() in ["png", "svg", "bmp", "jpg", "jpeg", "ktx", "tga", "webp"]
 
 
-func _apply_image_icon(tree_item:TreeItem, image_path: String, icon_size: Vector2):
+func _apply_image_icon(tree_item, image_path, icon_size):
 	var img = Image.load_from_file(image_path)
 	if not img:
 		return
 	var img_size = img.get_size()
-	var height
-	var width
-	if img_size.y > img_size.x:
-		width = ceil(float(img_size.x) * float(icon_size.y) / img_size.y)
-		height = icon_size.y
-	else:
-		width = icon_size.x
-		height = ceil(float(img_size.y) * float(icon_size.x) / img_size.x)
-		
+
+	var img_scale = Vector2(DEFAULT_ICON_SIZE) / Vector2(img_size)
+	img_scale = min(img_scale.x, img_scale.y)
+	var width = max(1, img_size.x * img_scale)
+	var height = max(1, img_size.y * img_scale)
 	img.resize(width, height)
 	var icon_texture = ImageTexture.create_from_image(img)
 	if tree_item:
-		tree_item.set_icon.call_deferred(0, icon_texture)
-		
+		save_texture_on_TreeItem(tree_item, 0, icon_texture)
+	# Wait for possible free/delete to avoid null error
+	await get_tree().process_frame
+	if tree_item and not tree_item.is_queued_for_deletion():
+		tree_item.set_icon.call_deferred(0, padded_ratio_resize_texture(icon_texture, icon_size))
+
+
+func _apply_alternating_color():
+	print("AltCol called")
+	var count = 0
+	for tree_item: TreeItem in _get_all_tree_items():
+		var color_bg = Color.TRANSPARENT if not count % 2 else Color(1,1,1,alternate_row_bg_highlight)
+		for col in columns:
+				tree_item.set_custom_bg_color.call_deferred(col, color_bg)
+		count += 1
+
+
+func _on_sorted() -> void:
+	_apply_alternating_color()
+
+
+static func resize_texture(texture: Texture2D, new_size: Vector2i):
+	var img = texture.get_image()
+	img.resize(new_size.x, new_size.y)
+	return ImageTexture.create_from_image(img)
+
+static func padded_ratio_resize_texture(texture: Texture2D, clamp_size: Vector2i):
+	
+	var text_size = Vector2i(texture.get_size())
+	var img_scale = Vector2(clamp_size) / Vector2(text_size)
+	var scale_f = minf(img_scale.x, img_scale.y)
+	var new_width = ceil(text_size.x * scale_f)
+	var new_height = ceil(text_size.y * scale_f)
+	var scaled_img = texture.get_image()
+	scaled_img.resize(new_width, new_height)
+	var pos_x = (clamp_size.x - new_width) / 2
+	var pos_y = (clamp_size.y - new_height) / 2
+	
+	var new_rect = Rect2i(0,0, new_width, new_height)
+	var new_pos = Vector2i(pos_x, pos_y)
+	
+	scaled_img.convert(Image.FORMAT_RGBA8)
+	var img = Image.create(clamp_size.x, clamp_size.y, false,Image.FORMAT_RGBA8)
+	img.blit_rect(scaled_img, new_rect, new_pos)
+	return ImageTexture.create_from_image(img)
+
+
+func _on_tree_added_timer_timeout() -> void:
+	_apply_alternating_color()
