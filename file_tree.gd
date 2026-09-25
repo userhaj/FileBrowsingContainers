@@ -863,7 +863,7 @@ func _on_empty_clicked(click_position: Vector2, mouse_button_index: int) -> void
 		$FilePopupMenu.pre_popup(selected_paths)
 		$FilePopupMenu.position = get_screen_transform() * click_position
 		$FilePopupMenu.popup()
-		
+
 
 func _on_item_edited() -> void:
 	# Find edited TreeItem(s) and update them
@@ -940,7 +940,6 @@ func _apply_image_icon(tree_item, image_path, icon_size):
 	if not img:
 		return
 	var img_size = img.get_size()
-
 	var img_scale = Vector2(DEFAULT_ICON_SIZE) / Vector2(img_size)
 	img_scale = min(img_scale.x, img_scale.y)
 	var width = max(1, img_size.x * img_scale)
@@ -956,7 +955,6 @@ func _apply_image_icon(tree_item, image_path, icon_size):
 
 
 func _apply_alternating_color():
-	print("AltCol called")
 	var count = 0
 	for tree_item: TreeItem in _get_all_tree_items():
 		var color_bg = Color.TRANSPARENT if not count % 2 else Color(1,1,1,alternate_row_bg_highlight)
@@ -974,8 +972,8 @@ static func resize_texture(texture: Texture2D, new_size: Vector2i):
 	img.resize(new_size.x, new_size.y)
 	return ImageTexture.create_from_image(img)
 
+
 static func padded_ratio_resize_texture(texture: Texture2D, clamp_size: Vector2i):
-	
 	var text_size = Vector2i(texture.get_size())
 	var img_scale = Vector2(clamp_size) / Vector2(text_size)
 	var scale_f = minf(img_scale.x, img_scale.y)
