@@ -310,7 +310,7 @@ func _ready():
 	for icon in icon_textures.keys():
 		icon_textures.set(icon, ImageTexture.create_from_image(render_images[count]))
 		count += 1
-
+	
 
 func _enter_tree() -> void:
 	# Handle dropped files
@@ -397,7 +397,7 @@ func refresh():
 			tree_root = create_item()
 			tree_root.set_text(0, "root")
 		hide_root = true
-		
+		var queued_tickets = []
 		if show_folders:
 			var dir_access = DirAccess.open(self._full_directory_path)
 			if dir_access:
@@ -410,8 +410,9 @@ func refresh():
 					# Guarantee current refresh is latest
 					if _refresh_id != this_refresh_id:
 						return
-					thread_queue.enqueue(_add_path_to_tree.call_deferred.bind(tree_root, _full_directory_path.path_join(directory)))
 					#count += 1
+					var queue_num = thread_queue.enqueue(_add_path_to_tree.call_deferred.bind(tree_root, _full_directory_path.path_join(directory)))
+					queued_tickets.append(queue_num)
 		
 		if show_files:
 			var dir_access = DirAccess.open(self._full_directory_path)
@@ -424,10 +425,13 @@ func refresh():
 					# Guarantee current refresh is latest
 					if _refresh_id != this_refresh_id: 
 						return
-					thread_queue.enqueue(_add_path_to_tree.call_deferred.bind(tree_root, _full_directory_path.path_join(file)))
 					#count += 1
-					
+					var queue_num = thread_queue.enqueue(_add_path_to_tree.call_deferred.bind(tree_root, _full_directory_path.path_join(file)))
+					queued_tickets.append(queue_num)
 		
+		# Wait for all files to be loaded before sorting
+		while thread_queue.queue_numbers.any(func(number): return queued_tickets.has(number)):
+			await get_tree().process_frame; 
 		# Sort again on refresh
 		_sort_tree.call_deferred(tree_root, _sort_column, _is_sort_ascending)
 	
@@ -498,7 +502,7 @@ func _on_item_collapsed(item:TreeItem):
 		if item.get_child_count() > 0:
 			for folder_path in item.get_children():
 				item.remove_child(folder_path)
-			_add_sub_folder(item)
+			await _add_sub_folder(item)
 		_sort_tree.call_deferred(item, _sort_column, _is_sort_ascending)
 		
 		$FolderPoller.add_folder_to_poll(path_from_TreeItem(item))
@@ -512,6 +516,7 @@ func _on_item_collapsed(item:TreeItem):
 
 
 func _add_sub_folder(tree_item: TreeItem):
+	var queued_tickets = [] # Thread queue
 	# Create TreeItems for all subfolders of given TreeItem
 	var path = tree_item.get_metadata(0)["path"]
 	if path:
@@ -521,14 +526,21 @@ func _add_sub_folder(tree_item: TreeItem):
 			dir.list_dir_begin()
 			var file_name = dir.get_next()
 			while file_name:
+				
 				var full_path = path.path_join(file_name)
 				# If folder, create TreeItem folder
 				if show_folders and DirAccess.dir_exists_absolute(full_path):
-					thread_queue.enqueue(_add_path_to_tree.call_deferred.bind(tree_item, full_path))
+					var queue_num = thread_queue.enqueue(_add_path_to_tree.call_deferred.bind(tree_item, full_path))
+					queued_tickets.append(queue_num)
 				elif show_files and FileAccess.file_exists(full_path):
-					thread_queue.enqueue(_add_path_to_tree.call_deferred.bind(tree_item, full_path))
+					var queue_num = thread_queue.enqueue(_add_path_to_tree.call_deferred.bind(tree_item, full_path))
+					queued_tickets.append(queue_num)
 				# Check next folder
 				file_name = dir.get_next()
+	
+	# Wait for all files to be loaded before sorting
+	while thread_queue.queue_numbers.any(func(number): return queued_tickets.has(number)):
+		await get_tree().process_frame; 
 
 
 # Create a TreeItem for given path on given base TreeItem
