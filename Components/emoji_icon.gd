@@ -3,6 +3,27 @@ class_name EmojiIcon
 
 static var cached_icon: Dictionary[String,WeakRef] = {}
 
+static var ext_icons : Dictionary = {"dll": "📚", "txt": "🗒️", "exe": "🚀", "conf": "⚙️",\
+ "ini": "⚙️", "py": "🐍", "pyw": "🐍", "url": "🕸️", "htm": "🕸️", "html": "🕸️",\
+"lnk": "🔗", "ods": "📊", "xls": "📊", "xlsx": "📊", "json": "📔", "jar": "☕",\
+"properties": "⚙️", "mkv": "🎞️", "webm": "🎞️", "flv": "🎞️", "3g2": "🎞️", \
+"3gp": "🎞️", "amv": "🎞️", "asf": "🎞️", "avi": "🎞️", "gifv": "🎞️", "m4v": "🎞️",\
+ "mov": "🎞️", "qt": "🎞️", "mpg": "🎞️", "mpeg": "🎞️", "mts": "🎞️", "m2ts": "🎞️",\
+ "ts": "🎞️", "ogv": "🎞️", "rmvb": "🎞️", "wmv": "🎞️", "mp4": "🎞️", "mp3": "🎵",\
+"wav": "🎵", "jpg": "🖼️", "png": "🖼️", "gif": "🖼️", "zip": "🗜️", "rar": "🗜️", \
+"x86_64": "🚀", "pdf": "🖨️", "ogg": "🎵", "c": "🌊", "cpp": "🌊", "sh": "🐚", \
+"desktop": "🖥️", "h": "🗣️", "so": "🎁", "md": "🗒️", "drawio": "📝", "bin": "💿",\
+"iso": "💿", "stl": "🧵", "gcode": "🧵", "arm64": "🦾", "svg": "🖼️",\
+ "hpp": "🗣️", "cfg": "⚙️", "apk": "🤖", "docx": "🗒️", "ppt": "📽️", "": "📄",\
+"folder": "📁"}
+
+static func icon_texture_from_filepath(filepath: String, font: Font = null) -> ImageTexture:
+	var file_ext = "folder" if DirAccess.dir_exists_absolute(filepath) else filepath.get_extension()
+	var emoji = ext_icons.get(file_ext, "📄")
+	if not font:
+		font = preload("uid://0h6c0qjdknr1") # Noto color emoji
+	return get_img_texture(emoji, font, 128)
+
 static func get_img_texture(emoji: String, font: Font, font_size: int, font_color: Color = Color.BLACK):
 	# Clear unreferenced objects
 	for key in cached_icon:

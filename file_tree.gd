@@ -50,23 +50,6 @@ var tree_item_font_size :int :
 
 var _is_tree_item_selected_before_click: bool = false
 
-# TODO get icons from outside self
-var icons : Dictionary = {"dll": "📚", "txt": "🗒️", "exe": "🚀", "conf": "⚙️",\
- "ini": "⚙️", "py": "🐍", "pyw": "🐍", "url": "🕸️", "htm": "🕸️", "html": "🕸️",\
-"lnk": "🔗", "ods": "📊", "xls": "📊", "xlsx": "📊", "json": "📔", "jar": "☕",\
-"properties": "⚙️", "mkv": "🎞️", "webm": "🎞️", "flv": "🎞️", "3g2": "🎞️", \
-"3gp": "🎞️", "amv": "🎞️", "asf": "🎞️", "avi": "🎞️", "gifv": "🎞️", "m4v": "🎞️",\
- "mov": "🎞️", "qt": "🎞️", "mpg": "🎞️", "mpeg": "🎞️", "mts": "🎞️", "m2ts": "🎞️",\
- "ts": "🎞️", "ogv": "🎞️", "rmvb": "🎞️", "wmv": "🎞️", "mp4": "🎞️", "mp3": "🎵",\
-"wav": "🎵", "jpg": "🖼️", "png": "🖼️", "gif": "🖼️", "zip": "🗜️", "rar": "🗜️", \
-"x86_64": "🚀", "pdf": "🖨️", "ogg": "🎵", "c": "🌊", "cpp": "🌊", "sh": "🐚", \
-"desktop": "🖥️", "h": "🗣️", "so": "🎁", "md": "🗒️", "drawio": "📝", "bin": "💿",\
-"iso": "💿", "stl": "🧵", "gcode": "🧵", "arm64": "🦾", "svg": "🖼️",\
- "hpp": "🗣️", "cfg": "⚙️", "apk": "🤖", "docx": "🗒️", "ppt": "📽️", "": "📄",\
-"folder": "📁"}
-
-var icon_textures = {}
-
 const DEFAULT_ICON_SIZE = Vector2(256,256)
 
 const FILE_TRANSFER_WINDOW = preload("uid://5bl4nmd56lgq")
@@ -145,7 +128,6 @@ func set_tree_item_font_size(value: int):
 	for tree_item: TreeItem in _get_all_tree_items():
 		tree_item.set_icon_region(0, Rect2(0,0,1,1))
 		
-		
 		var max_height = get_item_area_rect(tree_item).size.y
 		tree_item.set_icon_region(0, Rect2())
 		tree_item.set_icon_max_width.call_deferred(0,max_height)
@@ -180,8 +162,6 @@ func _get_text_size(text: String) -> Vector2:
 
 	var font = edit_theme.get_font("font", _unique_theme_type)
 	return font.get_string_size(text)
-	
-
 
 
 func _alter_icons(value):
@@ -299,18 +279,7 @@ func _ready():
 	
 	if edit_theme:
 		_tree_item_font_size = edit_theme.get_font_size("font_size", _unique_theme_type)
-	
-	# Create all icons used
-	for icon in icons.values():
-		icon_textures.set(icon, null)
-	var icon_font = edit_theme.get_font("font", "EmojiFont")
-	icon_font = icon_font if icon_font else get_theme_default_font()
-	var render_images= TextRenderer.batch_text_to_image(icon_textures.keys(), icon_font, 128)
-	var count = 0
-	for icon in icon_textures.keys():
-		icon_textures.set(icon, ImageTexture.create_from_image(render_images[count]))
-		count += 1
-	
+
 
 func _enter_tree() -> void:
 	# Handle dropped files
@@ -341,7 +310,7 @@ func files_dropped(files: PackedStringArray):
 				file_transfer.copy(files, target_folder)
 			
 
-# Change current directoy, removes all icons and adds icons for full_path
+# Change current directoy
 func set_directory(full_path: String):
 	$FileBrowsingController.set_directory(full_path)
 	$FolderPoller.only_poll_folder(full_path)
@@ -596,15 +565,8 @@ func _add_path_to_tree(base_tree_item, full_path: String, label_full_path: bool=
 				new_tree_item.set_text.call_deferred(type_column_index, "Folder")
 			else:
 				new_tree_item.set_text.call_deferred(column_titles.find(column_titles[column.TYPE]), full_path.get_extension() )
-		
-		# Set Icon
-		var icon_emoji = "📁"
-		if not is_folder:
-			# Find icon to use based on extension
-			var ext: String = full_path.get_extension()
-			icon_emoji = icons.get(ext, "📄")
 
-		new_tree_item.set_icon(0, icon_textures.get(icon_emoji))
+		new_tree_item.set_icon(0, EmojiIcon.icon_texture_from_filepath(full_path))
 		# Minmize icon
 		new_tree_item.set_icon_max_width(0,1)
 		# Get height of treeitem without icon
@@ -615,8 +577,7 @@ func _add_path_to_tree(base_tree_item, full_path: String, label_full_path: bool=
 		if is_image_extension(full_path.get_extension()):
 			thread_queue.enqueue(_apply_image_icon.bind(new_tree_item, full_path, Vector2(max_height, max_height)))
 		
-		
-		# Create place holder item on folders with sub-content
+		# Create placeholder item on folders with sub-content (allows unfold arrow)
 		if is_folder and file_size > 0:
 			create_item(new_tree_item)
 		
@@ -728,7 +689,6 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 			label.label_settings = label_set
 			#label_box.add_child(label)
 			var icon = TextureRect.new()
-			# TODO Error handling on no icon?
 			icon.texture = select.get_icon(0)
 			icon.custom_maximum_size = Vector2(tree_item_font_size, tree_item_font_size+2)
 			var hbox = HBoxContainer.new()
@@ -969,7 +929,7 @@ func _apply_image_icon(tree_item, image_path, icon_size):
 func _apply_alternating_color():
 	var count = 0
 	for tree_item: TreeItem in _get_all_tree_items():
-		var color_bg = Color.TRANSPARENT if not count % 2 else Color(1,1,1,alternate_row_bg_highlight)
+		var color_bg = Color.TRANSPARENT if not count % 2 else Color(1.0,1.0,1.0,alternate_row_bg_highlight)
 		for col in columns:
 				tree_item.set_custom_bg_color.call_deferred(col, color_bg)
 		count += 1
