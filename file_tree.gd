@@ -72,32 +72,6 @@ func folder_at_mouse() -> String:
 	return path
 
 func _input(event):
-	# Handle rename hotkey F2
-	if event is InputEventKey and Input.is_key_pressed(KEY_F2):
-		var selected_trees: Array[TreeItem] = get_selected_tree_items()
-		if selected_trees.size() > 0:
-			for tree_item in selected_trees:
-				tree_item.set_editable(0, true)
-			edit_selected(false)
-			for tree_item in selected_trees:
-				tree_item.set_editable(0, false)
-	
-	# Handle refresh hotkey F5
-	if event is InputEventKey and Input.is_key_pressed(KEY_F5) and not event.is_echo():
-		refresh()
-	
-	# Swap show hidden files when ctrl+H pressed
-	if event is InputEventKey and Input.is_key_pressed(KEY_H) and \
-	not event.is_echo() and event.ctrl_pressed:
-		show_hidden_files = not show_hidden_files
-		refresh()
-
-	# Deselect all on escape
-	if event is InputEventKey and Input.is_key_pressed(KEY_ESCAPE) and \
-	not event.is_echo():
-		if visible:
-			deselect_all()
-
 	# Resize column width
 	if dragging_resize_column > -1:
 		var width =  get_local_mouse_position().x
@@ -133,7 +107,7 @@ func set_tree_item_font_size(value: int):
 		tree_item.set_icon_max_width.call_deferred(0,max_height)
 		var tree_texture = get_texture_on_TreeItem(tree_item, 0)
 		if tree_texture:
-			tree_item.set_icon(0, padded_ratio_resize_texture(tree_texture, Vector2(max_height, max_height)))
+			tree_item.set_icon(0, TextureEdit.padded_ratio_resize_texture(tree_texture, Vector2(max_height, max_height)))
 	
 	await get_tree().process_frame
 	edit_theme = ThemeDB.get_project_theme()
@@ -191,22 +165,40 @@ func _get_all_tree_items() -> Array:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# Select all Ctrl+A
-	if event is InputEventKey and Input.is_key_pressed(KEY_A) and \
-	not event.is_echo() and event.ctrl_pressed:
-		if visible:
-			var tree_item = get_root().get_first_child()
-			while tree_item:
-				tree_item.select(0)
-				tree_item = tree_item.get_next_visible()
-	
-	# Delete selected files on "Delete" key
-	if event is InputEventKey and Input.is_key_pressed(KEY_DELETE) and \
-	# Multiple FileTrees may be available, only affect focused File Tree
-	not event.is_echo() and visible and has_focus():
-		var selected = PackedStringArray(get_selected_paths())
-		if selected:
-			$TrashFileConfirmationDialog.ask_trash_files(selected)
+	# Handle rename hotkey F2
+	if event is InputEventKey:
+		
+		match event.keycode:
+			KEY_F2:
+				var selected_trees: Array[TreeItem] = get_selected_tree_items()
+				if selected_trees.size() > 0:
+					for tree_item in selected_trees:
+						tree_item.set_editable(0, true)
+					edit_selected(false)
+					for tree_item in selected_trees:
+						tree_item.set_editable(0, false)
+			KEY_F5:
+				refresh()
+			KEY_H:
+				if event.ctrl_pressed:
+					show_hidden_files = not show_hidden_files
+					refresh()
+			KEY_ESCAPE:
+				if visible:
+					deselect_all()
+			KEY_A:
+				if event.ctrl_pressed and has_focus():
+					if visible:
+						var tree_item = get_root().get_first_child()
+						while tree_item:
+							tree_item.select(0)
+							tree_item = tree_item.get_next_visible()
+			KEY_DELETE:
+				# Multiple FileTrees may be available, only affect focused File Tree
+				if visible and has_focus():
+					var selected = PackedStringArray(get_selected_paths())
+					if selected:
+						$TrashFileConfirmationDialog.ask_trash_files(selected)
 
 func _gui_input(event: InputEvent) -> void:
 	# On column title cursor end click, start column resize
@@ -360,7 +352,6 @@ func refresh():
 	else:
 		# Remove current directory content
 		clear()
-		
 		
 		if not tree_root:
 			tree_root = create_item()
@@ -523,19 +514,12 @@ func _add_path_to_tree(base_tree_item, full_path: String, label_full_path: bool=
 			label_text = "/"
 		new_tree_item.set_text(0, label_text) # On folders get_file() gets last folder name
 		set_path_on_TreeItem(new_tree_item, full_path)
-
-		var is_folder = DirAccess.dir_exists_absolute(full_path)
-
-		var file_size
-		if is_folder:
-			var dirAcc = DirAccess.open(full_path)
-			if dirAcc:
-				dirAcc.include_hidden = true
-				var dir_count = dirAcc.get_directories().size()
-				var file_count = dirAcc.get_files().size()
-				file_size = dir_count + file_count
-		else:
-			file_size = FileAccess.get_size(full_path)
+		
+		var file_info = FileActions.get_file_info(full_path)
+		var is_folder = file_info["is_folder"]
+		var file_size = file_info["size"]
+		var date_modified = file_info["date_modified"]
+		var date_accessed = file_info["date_accessed"]
 		
 		# Catch all on errors, happens on lack of file permission
 		file_size = file_size if file_size else 0
@@ -547,13 +531,12 @@ func _add_path_to_tree(base_tree_item, full_path: String, label_full_path: bool=
 			new_tree_item.set_text(size_column_index, str(file_size)+ size_type_str)
 			
 		# Set date modified column
-		var date_modified = FileAccess.get_modified_time(full_path)
 		var date_modified_column_index = column_titles.find(column_titles[column.DATE_MODIFIED])
 		if date_modified_column_index >= 0 and date_modified_column_index < columns: # Only set size if it exists
 			new_tree_item.set_text(date_modified_column_index, Time.get_datetime_string_from_unix_time(date_modified, true))
 		
 		# Set date accessed column
-		var date_accessed = FileAccess.get_access_time(full_path)
+		
 		var date_accessed_column_index = column_titles.find(column_titles[column.ACCESSED])
 		if date_accessed_column_index >= 0 and date_accessed_column_index < columns: # Only set size if it exists
 			new_tree_item.set_text(date_accessed_column_index, Time.get_datetime_string_from_unix_time(date_accessed, true))
@@ -574,7 +557,7 @@ func _add_path_to_tree(base_tree_item, full_path: String, label_full_path: bool=
 		# Set icon to same height as treeitem
 		new_tree_item.set_icon_max_width.call_deferred(0,max_height)
 		
-		if is_image_extension(full_path.get_extension()):
+		if FileActions.is_image_extension(full_path.get_extension()):
 			thread_queue.enqueue(_apply_image_icon.bind(new_tree_item, full_path, Vector2(max_height, max_height)))
 		
 		# Create placeholder item on folders with sub-content (allows unfold arrow)
@@ -727,7 +710,7 @@ func _drop_data(_at_position: Vector2, data: Variant) -> void:
 	
 
 
-func path_from_TreeItem(given_item: TreeItem) -> String:
+static func path_from_TreeItem(given_item: TreeItem) -> String:
 	var meta_dictionary = given_item.get_metadata(0)
 	meta_dictionary = meta_dictionary if meta_dictionary else {}
 	var path = meta_dictionary.get("path")
@@ -736,7 +719,7 @@ func path_from_TreeItem(given_item: TreeItem) -> String:
 	return ""
 
 
-func set_path_on_TreeItem(tree_item: TreeItem, new_path: String):
+static func set_path_on_TreeItem(tree_item: TreeItem, new_path: String):
 	var meta_dictionary = tree_item.get_metadata(0)
 	meta_dictionary = meta_dictionary if meta_dictionary else {}
 	meta_dictionary["path"] = new_path
@@ -754,7 +737,6 @@ static func get_texture_on_TreeItem(tree_item: TreeItem, set_column: int):
 	if meta_dictionary:
 		return meta_dictionary.get("texture")
 	return Texture2D.new()
-	
 
 
 # Returns Array of paths in current directory
@@ -903,10 +885,6 @@ func _get_fold_width(tree_item: TreeItem):
 		return level * (margin + fold_arrow_width)
 
 
-static func is_image_extension(extension: String):
-	return extension.to_lower() in ["png", "svg", "bmp", "jpg", "jpeg", "ktx", "tga", "webp"]
-
-
 func _apply_image_icon(tree_item, image_path, icon_size):
 	var img = Image.load_from_file(image_path)
 	if not img:
@@ -923,7 +901,7 @@ func _apply_image_icon(tree_item, image_path, icon_size):
 	# Wait for possible free/delete to avoid null error
 	await get_tree().process_frame
 	if tree_item and not tree_item.is_queued_for_deletion():
-		tree_item.set_icon.call_deferred(0, padded_ratio_resize_texture(icon_texture, icon_size))
+		tree_item.set_icon.call_deferred(0, TextureEdit.padded_ratio_resize_texture(icon_texture, icon_size))
 
 
 func _apply_alternating_color():
@@ -942,26 +920,6 @@ func _on_sorted() -> void:
 static func resize_texture(texture: Texture2D, new_size: Vector2i):
 	var img = texture.get_image()
 	img.resize(new_size.x, new_size.y)
-	return ImageTexture.create_from_image(img)
-
-
-static func padded_ratio_resize_texture(texture: Texture2D, clamp_size: Vector2i):
-	var text_size = Vector2i(texture.get_size())
-	var img_scale = Vector2(clamp_size) / Vector2(text_size)
-	var scale_f = minf(img_scale.x, img_scale.y)
-	var new_width = ceil(text_size.x * scale_f)
-	var new_height = ceil(text_size.y * scale_f)
-	var scaled_img = texture.get_image()
-	scaled_img.resize(new_width, new_height)
-	var pos_x = (clamp_size.x - new_width) / 2
-	var pos_y = (clamp_size.y - new_height) / 2
-	
-	var new_rect = Rect2i(0,0, new_width, new_height)
-	var new_pos = Vector2i(pos_x, pos_y)
-	
-	scaled_img.convert(Image.FORMAT_RGBA8)
-	var img = Image.create(clamp_size.x, clamp_size.y, false,Image.FORMAT_RGBA8)
-	img.blit_rect(scaled_img, new_rect, new_pos)
 	return ImageTexture.create_from_image(img)
 
 

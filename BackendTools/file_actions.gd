@@ -156,3 +156,32 @@ static func copy_files(originating_dir: String, target_dir: String, is_move: boo
 			err = dir_access.copy(originating_dir.path_join(file), target_dir.path_join(file))
 		errors.append(err)
 	return errors
+
+
+static func get_file_info(full_file_path: String) -> Dictionary:
+	var date_modified = FileAccess.get_modified_time(full_file_path)
+	var date_accessed = FileAccess.get_access_time(full_file_path)
+	var is_folder = DirAccess.dir_exists_absolute(full_file_path)
+
+	var file_size
+	if is_folder:
+		var dirAcc = DirAccess.open(full_file_path)
+		if dirAcc:
+			dirAcc.include_hidden = true
+			var dir_count = dirAcc.get_directories().size()
+			var file_count = dirAcc.get_files().size()
+			file_size = dir_count + file_count
+	else:
+		file_size = FileAccess.get_size(full_file_path)
+	return {
+		"path": full_file_path,
+		"date_modified": date_modified,
+		"date_accessed": date_accessed,
+		"size": file_size,
+		"is_folder": is_folder,
+		"extension": full_file_path.get_extension() if not is_folder else "Folder"
+		}
+
+
+static func is_image_extension(extension: String):
+	return extension.to_lower() in ["png", "svg", "bmp", "jpg", "jpeg", "ktx", "tga", "webp"]
