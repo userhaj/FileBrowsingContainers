@@ -128,6 +128,7 @@ func set_tree_item_font_size(value: int):
 		get_tree().process_frame.disconnect(fold_icon_change)
 	get_tree().process_frame.connect(fold_icon_change, CONNECT_ONE_SHOT)
 
+
 func _get_text_size(text: String) -> Vector2:
 	if not edit_theme:
 		edit_theme = ThemeDB.get_project_theme()
@@ -271,6 +272,32 @@ func _ready():
 	
 	if edit_theme:
 		_tree_item_font_size = edit_theme.get_font_size("font_size", _unique_theme_type)
+	
+	# Set OS color scheme
+	var accent_opacities = {
+		"selected": 0.3,
+		"selected_focus": 0.3,
+		"hovered": 0.07,
+		"hovered_dimmed": 0.02,
+		"hovered_selected": 0.7,
+		"hovered_selected_focus": 0.4,
+		}
+	var accent_border_opacities = {
+		"cursor": 0.75,
+		"cursor_unfocused": 0.75
+		}
+	for style_name in accent_opacities:
+		var style_b = StyleBoxFlat.new()
+		style_b.set_corner_radius_all(3)
+		style_b.bg_color = Color(DisplayServer.get_accent_color(), accent_opacities.get(style_name, 1.0))
+		edit_theme.set_stylebox(style_name, _unique_theme_type, style_b)
+	for style_name in accent_border_opacities:
+		var style_b = StyleBoxFlat.new()
+		style_b.border_color = Color(DisplayServer.get_accent_color(), accent_border_opacities.get(style_name, 1.0))
+		style_b.set_border_width_all(2)
+		style_b.set_corner_radius_all(3)
+		style_b.bg_color = Color.TRANSPARENT
+		edit_theme.set_stylebox(style_name, _unique_theme_type, style_b)
 
 
 func _enter_tree() -> void:

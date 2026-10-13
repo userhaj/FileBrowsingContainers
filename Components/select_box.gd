@@ -6,11 +6,19 @@ signal selected_area(area: Rect2)
 
 var is_selecting = false
 var start_pos: Vector2
-var clamp_area:= Rect2()
+var clamp_area:= Rect2() 
+var _color: Color
+@export var color: Color:
+	set(value): set_color(value)
+	get: return _color
 
 var _select_on_next_drag = false
 var _select_on_next_drag_start
 
+func set_color(new_color: Color):
+	_color = new_color
+	$SelectColorRect.color = new_color
+	
 func start_selecting(start_position: Vector2, max_bounds:= Rect2()):
 	# Show higlighting rect
 	$SelectColorRect.set_position(start_position)
@@ -34,6 +42,9 @@ func stop_selecting():
 func cancel_select():
 	self.is_selecting = false
 	$SelectColorRect.hide()
+
+func _ready() -> void:
+	color = Color(DisplayServer.get_accent_color(), 0.25)
 
 func _input(event: InputEvent) -> void:
 	# Cancel selectbox if drag file started
